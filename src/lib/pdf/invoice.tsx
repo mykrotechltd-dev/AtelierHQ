@@ -1,0 +1,113 @@
+import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
+
+const styles = StyleSheet.create({
+  page: { padding: 32, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b" },
+  header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
+  shopName: { fontSize: 18, fontWeight: 700 },
+  muted: { color: "#64748b" },
+  section: { marginBottom: 16 },
+  label: { color: "#64748b", fontSize: 9, textTransform: "uppercase", marginBottom: 2 },
+  table: { display: "flex", width: "100%", marginTop: 8 },
+  tableRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e2e8f0", paddingVertical: 6 },
+  tableHeader: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#1e293b", paddingBottom: 6, fontWeight: 700 },
+  colGarment: { width: "34%" },
+  colDesc: { width: "30%" },
+  colQty: { width: "10%", textAlign: "right" },
+  colPrice: { width: "13%", textAlign: "right" },
+  colSubtotal: { width: "13%", textAlign: "right" },
+  totals: { marginTop: 16, alignSelf: "flex-end", width: 220 },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
+  totalRowStrong: { flexDirection: "row", justifyContent: "space-between", paddingTop: 6, borderTopWidth: 1, borderTopColor: "#1e293b", fontWeight: 700 },
+  footer: { marginTop: 32, fontSize: 8, color: "#94a3b8", textAlign: "center" },
+});
+
+export type InvoiceData = {
+  tenant: { name: string; phone: string | null; address: string | null; currency: string };
+  invoiceNumber: string;
+  issuedAt: string;
+  order: { orderNumber: string; dueDate: string | null };
+  customer: { fullName: string; phone: string; address: string | null };
+  items: { garmentType: string; description: string | null; quantity: number; unitPrice: number }[];
+  discount: number;
+  amountPaid: number;
+};
+
+function money(n: number, currency: string) {
+  return n.toLocaleString(undefined, { style: "currency", currency });
+}
+
+export function InvoiceDocument({ data }: { data: InvoiceData }) {
+  const total = data.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const balance = total - data.discount - data.amountPaid;
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.shopName}>{data.tenant.name}</Text>
+            {data.tenant.address && <Text style={styles.muted}>{data.tenant.address}</Text>}
+            {data.tenant.phone && <Text style={styles.muted}>{data.tenant.phone}</Text>}
+          </View>
+          <View>
+            <Text style={styles.label}>Invoice</Text>
+            <Text>{data.invoiceNumber}</Text>
+            <Text style={styles.muted}>{data.issuedAt}</Text>
+            <Text style={styles.muted}>Order {data.order.orderNumber}</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Bill to</Text>
+          <Text>{data.customer.fullName}</Text>
+          <Text style={styles.muted}>{data.customer.phone}</Text>
+          {data.customer.address && <Text style={styles.muted}>{data.customer.address}</Text>}
+        </View>
+
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <Text style={styles.colGarment}>Garment</Text>
+            <Text style={styles.colDesc}>Description</Text>
+            <Text style={styles.colQty}>Qty</Text>
+            <Text style={styles.colPrice}>Unit price</Text>
+            <Text style={styles.colSubtotal}>Subtotal</Text>
+          </View>
+          {data.items.map((item, idx) => (
+            <View key={idx} style={styles.tableRow}>
+              <Text style={styles.colGarment}>{item.garmentType}</Text>
+              <Text style={styles.colDesc}>{item.description ?? "—"}</Text>
+              <Text style={styles.colQty}>{item.quantity}</Text>
+              <Text style={styles.colPrice}>{money(item.unitPrice, data.tenant.currency)}</Text>
+              <Text style={styles.colSubtotal}>{money(item.quantity * item.unitPrice, data.tenant.currency)}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.totals}>
+          <View style={styles.totalRow}>
+            <Text>Subtotal</Text>
+            <Text>{money(total, data.tenant.currency)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text>Discount</Text>
+            <Text>-{money(data.discount, data.tenant.currency)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text>Paid</Text>
+            <Text>-{money(data.amountPaid, data.tenant.currency)}</Text>
+          </View>
+          <View style={styles.totalRowStrong}>
+            <Text>Balance due</Text>
+            <Text>{money(balance, data.tenant.currency)}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.footer}>Generated by AtelierHQ — thank you for your business.</Text>
+      </Page>
+    </Document>
+  );
+}
+
+export async function renderInvoicePdf(data: InvoiceData): Promise<Buffer> {
+  return renderToBuffer(<InvoiceDocument data={data} />);
+}
