@@ -37,6 +37,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           {order.due_date && <p className="text-sm text-slate-500">Due {order.due_date}</p>}
         </div>
         <div className="flex items-center gap-3">
+          <Link href={`/gallery?order_id=${order.id}`} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+            Gallery
+          </Link>
           <GenerateInvoiceButton orderId={order.id} customerWhatsapp={customer?.whatsapp_number ?? customer?.phone} />
         </div>
       </div>

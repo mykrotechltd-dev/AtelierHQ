@@ -7,11 +7,12 @@ export default async function ReportsPage() {
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [{ data: daily }, { data: dailyPayments }, { data: monthly }, { data: dueOrders }] = await Promise.all([
+  const [{ data: daily }, { data: dailyPayments }, { data: monthly }, { data: dueOrders }, { data: workerPerf }] = await Promise.all([
     supabase.from("report_daily").select("*").gte("day", thirtyDaysAgo).order("day", { ascending: false }),
     supabase.from("report_daily_payments").select("*").gte("day", thirtyDaysAgo).order("day", { ascending: false }),
     supabase.from("report_monthly_sales").select("*").order("month", { ascending: false }).limit(12),
     supabase.from("report_orders_due").select("*").order("due_date", { ascending: true }),
+    supabase.from("report_worker_performance").select("*").order("tasks_completed", { ascending: false }),
   ]);
 
   // Merge the two daily views by day for a single table.
@@ -86,6 +87,43 @@ export default async function ReportsPage() {
                   <td className="px-4 py-2 text-right">{(m.total_collected ?? 0).toFixed(2)}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-medium text-slate-800">Worker performance</h2>
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-2">Worker</th>
+                <th className="px-4 py-2 text-right">Completed</th>
+                <th className="px-4 py-2 text-right">In progress</th>
+                <th className="px-4 py-2 text-right">Avg turnaround</th>
+                <th className="px-4 py-2 text-right">Total paid out</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {workerPerf?.map((w) => (
+                <tr key={w.worker_id}>
+                  <td className="px-4 py-2 font-medium">{w.full_name}</td>
+                  <td className="px-4 py-2 text-right">{w.tasks_completed}</td>
+                  <td className="px-4 py-2 text-right">{w.tasks_in_progress}</td>
+                  <td className="px-4 py-2 text-right">
+                    {w.avg_turnaround_hours != null ? `${w.avg_turnaround_hours.toFixed(1)}h` : "—"}
+                  </td>
+                  <td className="px-4 py-2 text-right">{w.total_paid_out.toFixed(2)}</td>
+                </tr>
+              ))}
+              {workerPerf?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                    No workers yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
