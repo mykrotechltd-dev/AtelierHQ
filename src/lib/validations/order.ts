@@ -45,6 +45,15 @@ export const recordPaymentSchema = z.object({
   notes: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
+export const updateOrderItemSchema = z.object({
+  item_id: z.string().uuid(),
+  order_id: z.string().uuid(),
+  garment_type: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(500).optional().or(z.literal("")),
+  quantity: z.coerce.number().int().min(1).max(100),
+  unit_price: z.coerce.number().min(0).max(10_000_000),
+});
+
 export const assignTaskSchema = z.object({
   order_id: z.string().uuid(),
   order_item_id: z.string().uuid().optional().nullable(),

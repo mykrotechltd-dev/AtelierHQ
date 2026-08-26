@@ -7,6 +7,7 @@ import { requireCurrentUser } from "@/lib/utils/tenant";
 import {
   orderSchema,
   updateOrderStatusSchema,
+  updateOrderItemSchema,
   ALLOWED_STATUS_TRANSITIONS,
 } from "@/lib/validations/order";
 
@@ -65,6 +66,39 @@ export async function updateOrderStatus(formData: FormData) {
   if (parsed.data.status === "delivered") patch.delivered_at = new Date().toISOString();
 
   const { error } = await supabase.from("orders").update(patch).eq("id", parsed.data.order_id);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/orders/${parsed.data.order_id}`);
+  revalidatePath("/orders");
+  return { success: true };
+}
+
+export async function updateOrderItem(formData: FormData) {
+  await requireCurrentUser();
+  const supabase = createServerSupabase();
+
+  const parsed = updateOrderItemSchema.safeParse({
+    item_id: formData.get("item_id"),
+    order_id: formData.get("order_id"),
+    garment_type: formData.get("garment_type"),
+    description: formData.get("description") ?? "",
+    quantity: formData.get("quantity"),
+    unit_price: formData.get("unit_price"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid item" };
+
+  // orders.total_amount is recomputed automatically by the
+  // trg_order_items_recalc trigger — no manual total update needed here.
+  const { error } = await supabase
+    .from("order_items")
+    .update({
+      garment_type: parsed.data.garment_type,
+      description: parsed.data.description || null,
+      quantity: parsed.data.quantity,
+      unit_price: parsed.data.unit_price,
+    })
+    .eq("id", parsed.data.item_id);
+
   if (error) return { error: error.message };
 
   revalidatePath(`/orders/${parsed.data.order_id}`);

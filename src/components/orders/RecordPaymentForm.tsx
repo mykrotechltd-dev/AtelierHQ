@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { recordPayment } from "@/app/(dashboard)/payments/actions";
 
-export function RecordPaymentForm({ orderId, balance }: { orderId: string; balance: number }) {
+export function RecordPaymentForm({ orderId, balance, total }: { orderId: string; balance: number; total: number }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -20,6 +20,14 @@ export function RecordPaymentForm({ orderId, balance }: { orderId: string; balan
       return;
     }
     router.refresh();
+  }
+
+  if (total <= 0) {
+    return (
+      <p className="text-sm text-slate-400">
+        This order has no item prices yet — edit the unit price on an item above to enable recording a payment.
+      </p>
+    );
   }
 
   if (balance <= 0) {

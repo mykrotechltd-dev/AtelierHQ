@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { requireCurrentUser } from "@/lib/utils/tenant";
+import Link from "next/link";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { OrderStatusControl } from "@/components/orders/OrderStatusControl";
 import { RecordPaymentForm } from "@/components/orders/RecordPaymentForm";
 import { AssignTaskForm } from "@/components/orders/AssignTaskForm";
 import { GenerateInvoiceButton } from "@/components/orders/GenerateInvoiceButton";
+import { OrderItemRow } from "@/components/orders/OrderItemRow";
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   await requireCurrentUser();
@@ -52,17 +54,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <th className="px-4 py-2">Qty</th>
                 <th className="px-4 py-2">Unit price</th>
                 <th className="px-4 py-2">Subtotal</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items?.map((it) => (
-                <tr key={it.id}>
-                  <td className="px-4 py-2 font-medium capitalize">{it.garment_type}</td>
-                  <td className="px-4 py-2 text-slate-600">{it.description ?? "—"}</td>
-                  <td className="px-4 py-2">{it.quantity}</td>
-                  <td className="px-4 py-2">{it.unit_price.toFixed(2)}</td>
-                  <td className="px-4 py-2">{(it.quantity * it.unit_price).toFixed(2)}</td>
-                </tr>
+                <OrderItemRow key={it.id} orderId={order.id} item={it} />
               ))}
             </tbody>
           </table>
@@ -91,6 +88,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           ))}
           {tasks?.length === 0 && <p className="text-sm text-slate-400">No tasks assigned yet.</p>}
         </div>
+        {workers?.length === 0 && (
+          <p className="mb-2 text-sm text-slate-400">
+            No workers yet.{" "}
+            <Link href="/workers" className="text-brand-600 hover:underline">
+              Add one first →
+            </Link>
+          </p>
+        )}
         <AssignTaskForm orderId={order.id} workers={workers ?? []} items={items ?? []} />
       </section>
 
@@ -106,7 +111,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           ))}
           {payments?.length === 0 && <p className="text-sm text-slate-400">No payments recorded yet.</p>}
         </div>
-        <RecordPaymentForm orderId={order.id} balance={balance} />
+        <RecordPaymentForm orderId={order.id} balance={balance} total={order.total_amount} />
       </section>
     </div>
   );
