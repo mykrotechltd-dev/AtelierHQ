@@ -34,7 +34,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: { or
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Work gallery</h1>
+        <h1 className="text-xl font-semibold font-serif text-slate-900">Work gallery</h1>
         <p className="text-sm text-slate-500">Photos of finished projects.</p>
       </div>
 

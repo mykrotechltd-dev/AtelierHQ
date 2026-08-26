@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Scissors } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -79,9 +80,9 @@ export default function SignupPage() {
 
   if (awaitingConfirmation) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="flex min-h-screen items-center justify-center bg-cream px-4">
         <div className="max-w-sm rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="text-lg font-semibold">Check your email</h1>
+          <h1 className="font-serif text-lg font-semibold">Check your email</h1>
           <p className="mt-2 text-sm text-slate-500">
             We sent a confirmation link to <strong>{form.email}</strong>. Click it to activate your shop.
           </p>
@@ -91,10 +92,15 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-cream px-4 py-10">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-900">Set up your tailoring shop</h1>
-        <p className="mt-1 text-sm text-slate-500">14-day free trial, no card required.</p>
+        <div className="flex justify-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cream-100">
+            <Scissors className="h-5 w-5 text-brand-700" />
+          </div>
+        </div>
+        <h1 className="mt-3 text-center font-serif text-xl font-semibold text-slate-900">Set up your shop</h1>
+        <p className="mt-1 text-center text-sm text-slate-500">Tell us about your tailoring business to get started.</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <Field label="Business name" value={form.businessName} onChange={(v) => update("businessName", v)} required />

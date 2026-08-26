@@ -21,7 +21,7 @@ export default async function PaymentsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Payments</h1>
+        <h1 className="text-xl font-semibold font-serif text-slate-900">Payments</h1>
         <p className="text-sm text-slate-500">Customer collections and worker payouts.</p>
       </div>
 

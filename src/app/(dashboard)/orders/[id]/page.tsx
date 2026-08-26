@@ -41,7 +41,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     <div className="max-w-4xl space-y-8">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{order.order_number}</h1>
+          <h1 className="text-xl font-semibold font-serif text-slate-900">{order.order_number}</h1>
           <p className="text-sm text-slate-500">
             {customer?.full_name} · {customer?.phone}
           </p>

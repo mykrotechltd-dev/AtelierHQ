@@ -31,7 +31,7 @@ export default async function ReportsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Reports</h1>
+        <h1 className="text-xl font-semibold font-serif text-slate-900">Reports</h1>
         <p className="text-sm text-slate-500">Daily orders/payments, monthly sales, and orders due.</p>
       </div>
 

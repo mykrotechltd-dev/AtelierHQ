@@ -19,7 +19,7 @@ export default async function NewOrderPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">New order</h1>
+        <h1 className="text-xl font-semibold font-serif text-slate-900">New order</h1>
         <p className="text-sm text-slate-500">Add one or more garments to this order.</p>
       </div>
       <OrderForm customers={customers ?? []} defaultCustomerId={searchParams.customer_id} />

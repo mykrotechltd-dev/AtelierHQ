@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Scissors } from "lucide-react";
 import { requireCurrentUser } from "@/lib/utils/tenant";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { SidebarNav } from "@/components/dashboard/SidebarNav";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -24,29 +26,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <aside className="hidden w-56 shrink-0 border-r border-slate-200 bg-white px-4 py-6 md:block">
-        <p className="px-2 text-lg font-semibold text-brand-600">AtelierHQ</p>
-        <p className="mt-0.5 px-2 text-xs text-slate-400">{user.tenantName}</p>
-        <nav className="mt-6 space-y-1">
-          {NAV.map((item) => (
+    <div className="flex min-h-screen bg-cream">
+      <aside className="hidden w-60 shrink-0 bg-brand-800 px-4 py-6 md:flex md:flex-col">
+        <div className="flex items-center gap-2 px-2">
+          <Scissors className="h-5 w-5 shrink-0 text-accent-400" />
+          <p className="font-serif text-lg font-semibold leading-tight text-white">{user.tenantName}</p>
+        </div>
+        <p className="mt-0.5 pl-9 text-[11px] font-medium uppercase tracking-wider text-accent-400">AtelierHQ</p>
+
+        <SidebarNav items={NAV} />
+
+        <div className="mt-auto pt-6">
+          {isPlatformAdmin && (
             <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded-md px-2 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              href="/admin"
+              className="block rounded-md bg-white/10 px-3 py-2 text-center text-sm font-medium text-accent-400 hover:bg-white/15"
             >
-              {item.label}
+              Admin console
             </Link>
-          ))}
-        </nav>
-        {isPlatformAdmin && (
-          <Link
-            href="/admin"
-            className="mt-6 block rounded-md bg-slate-900 px-2 py-2 text-center text-sm font-medium text-amber-400 hover:bg-slate-800"
-          >
-            Admin console
-          </Link>
-        )}
+          )}
+        </div>
       </aside>
 
       <div className="flex-1">

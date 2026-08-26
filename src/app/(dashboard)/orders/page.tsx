@@ -28,7 +28,7 @@ export default async function OrdersPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Orders</h1>
+          <h1 className="text-xl font-semibold font-serif text-slate-900">Orders</h1>
           <p className="text-sm text-slate-500">Received → in progress → completed → delivered.</p>
         </div>
         <Link href="/orders/new" className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600">

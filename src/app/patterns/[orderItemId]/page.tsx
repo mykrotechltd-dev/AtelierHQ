@@ -29,7 +29,7 @@ export default async function PatternChooserPage({ params }: { params: { orderIt
         <Link href={`/orders/${item.order_id}`} className="text-sm text-brand-600 hover:underline">
           ← Back to order
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-slate-900">Generate pattern</h1>
+        <h1 className="mt-2 text-xl font-semibold font-serif text-slate-900">Generate pattern</h1>
         <p className="text-sm text-slate-500">
           {order?.order_number} · {customer?.full_name} · <span className="capitalize">{item.garment_type}</span>
         </p>

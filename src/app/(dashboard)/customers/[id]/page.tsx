@@ -24,7 +24,7 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{customer.full_name}</h1>
+        <h1 className="text-xl font-semibold font-serif text-slate-900">{customer.full_name}</h1>
         <p className="text-sm text-slate-500">
           {customer.phone} {customer.email ? `· ${customer.email}` : ""}
         </p>

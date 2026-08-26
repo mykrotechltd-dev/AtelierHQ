@@ -18,7 +18,7 @@ export default async function WorkersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Workers</h1>
+          <h1 className="text-xl font-semibold font-serif text-slate-900">Workers</h1>
           <p className="text-sm text-slate-500">Tailors and artisans you assign cutting, stitching, embroidery and hand-work tasks to.</p>
         </div>
         {canManage && <NewWorkerDialog />}

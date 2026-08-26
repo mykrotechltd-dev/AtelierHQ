@@ -22,7 +22,7 @@ export default async function TasksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Tasks</h1>
+        <h1 className="text-xl font-semibold font-serif text-slate-900">Tasks</h1>
         <p className="text-sm text-slate-500">Cutting, stitching, embroidery and hand work across all orders.</p>
       </div>
 

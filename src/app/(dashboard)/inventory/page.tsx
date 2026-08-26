@@ -18,7 +18,7 @@ export default async function InventoryPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Inventory</h1>
+          <h1 className="text-xl font-semibold font-serif text-slate-900">Inventory</h1>
           <p className="text-sm text-slate-500">
             Fabric and material stock.{" "}
             {lowStockCount > 0 && <span className="font-medium text-amber-700">{lowStockCount} item(s) low on stock.</span>}

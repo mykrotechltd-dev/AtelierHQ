@@ -27,7 +27,7 @@ export default async function CustomersPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Customers</h1>
+          <h1 className="text-xl font-semibold font-serif text-slate-900">Customers</h1>
           <p className="text-sm text-slate-500">Records and measurements in one place.</p>
         </div>
         <NewCustomerDialog />
