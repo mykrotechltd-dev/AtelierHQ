@@ -27,9 +27,14 @@ export async function requireCurrentUser(): Promise<CurrentUser> {
     redirect("/login");
   }
 
+  // Explicit relationship hint required: profiles.tenant_id -> tenants.id and
+  // tenants.owner_id -> profiles.id are two separate FK paths between these
+  // two tables, so PostgREST can't auto-resolve a bare `tenants(name)` embed
+  // (it silently errors, which was previously causing a dashboard<->onboarding
+  // redirect loop for every logged-in user).
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, tenant_id, tenants(name)")
+    .select("id, full_name, role, tenant_id, tenants!profiles_tenant_id_fkey(name)")
     .eq("id", user.id)
     .single();
 
