@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { updateOrderItem } from "@/app/(dashboard)/orders/actions";
 
 type Item = {
@@ -10,9 +11,20 @@ type Item = {
   description: string | null;
   quantity: number;
   unit_price: number;
+  measurement_id: string | null;
 };
 
-export function OrderItemRow({ orderId, item }: { orderId: string; item: Item }) {
+type MeasurementOption = { id: string; garment_type: string; label: string | null };
+
+export function OrderItemRow({
+  orderId,
+  item,
+  measurements,
+}: {
+  orderId: string;
+  item: Item;
+  measurements: MeasurementOption[];
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +54,15 @@ export function OrderItemRow({ orderId, item }: { orderId: string; item: Item })
         <td className="px-4 py-2">{item.unit_price.toFixed(2)}</td>
         <td className="px-4 py-2">{(item.quantity * item.unit_price).toFixed(2)}</td>
         <td className="px-4 py-2 text-right">
+          {item.measurement_id ? (
+            <Link href={`/patterns/${item.id}`} className="mr-3 text-xs text-brand-600 hover:underline">
+              Pattern
+            </Link>
+          ) : (
+            <span className="mr-3 text-xs text-slate-300" title="Link a measurement first (Edit)">
+              Pattern
+            </span>
+          )}
           <button onClick={() => setEditing(true)} className="text-xs text-brand-600 hover:underline">
             Edit
           </button>
@@ -69,6 +90,18 @@ export function OrderItemRow({ orderId, item }: { orderId: string; item: Item })
           <div>
             <label className="block text-xs text-slate-500">Unit price</label>
             <input name="unit_price" type="number" step="0.01" min={0} defaultValue={item.unit_price} required className="w-28 rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500">Measurement (for pattern)</label>
+            <select name="measurement_id" defaultValue={item.measurement_id ?? ""} className="w-44 rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+              <option value="">None linked</option>
+              {measurements.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.garment_type}
+                  {m.label ? ` — ${m.label}` : ""}
+                </option>
+              ))}
+            </select>
           </div>
           <button type="submit" disabled={pending} className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60">
             {pending ? "Saving…" : "Save"}

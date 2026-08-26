@@ -24,6 +24,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   if (!order) notFound();
 
   const customer = order.customers;
+
+  // Measurements belong to the order's customer, not the order itself — this
+  // is what OrderItemRow's "link a measurement" dropdown and pattern
+  // generation both read from.
+  const { data: measurements } = customer
+    ? await supabase
+        .from("measurements")
+        .select("id, garment_type, label")
+        .eq("customer_id", customer.id)
+        .order("created_at", { ascending: false })
+    : { data: [] };
   const balance = order.total_amount - order.discount - order.amount_paid;
 
   return (
@@ -62,7 +73,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items?.map((it) => (
-                <OrderItemRow key={it.id} orderId={order.id} item={it} />
+                <OrderItemRow key={it.id} orderId={order.id} item={it} measurements={measurements ?? []} />
               ))}
             </tbody>
           </table>

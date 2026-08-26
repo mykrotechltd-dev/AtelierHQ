@@ -84,6 +84,7 @@ export async function updateOrderItem(formData: FormData) {
     description: formData.get("description") ?? "",
     quantity: formData.get("quantity"),
     unit_price: formData.get("unit_price"),
+    measurement_id: formData.get("measurement_id") || null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid item" };
 
@@ -96,6 +97,7 @@ export async function updateOrderItem(formData: FormData) {
       description: parsed.data.description || null,
       quantity: parsed.data.quantity,
       unit_price: parsed.data.unit_price,
+      measurement_id: parsed.data.measurement_id,
     })
     .eq("id", parsed.data.item_id);
 

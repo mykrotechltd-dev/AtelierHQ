@@ -52,6 +52,7 @@ export const updateOrderItemSchema = z.object({
   description: z.string().trim().max(500).optional().or(z.literal("")),
   quantity: z.coerce.number().int().min(1).max(100),
   unit_price: z.coerce.number().min(0).max(10_000_000),
+  measurement_id: z.string().uuid().optional().nullable(),
 });
 
 export const assignTaskSchema = z.object({
