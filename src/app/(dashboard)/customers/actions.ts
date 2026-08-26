@@ -30,7 +30,13 @@ export async function createCustomer(formData: FormData) {
     .select("id")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    // 23505 = unique_violation — customers_tenant_phone_unique fired
+    if (error.code === "23505") {
+      return { error: "A customer with this phone number already exists." };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath("/customers");
   return { data };

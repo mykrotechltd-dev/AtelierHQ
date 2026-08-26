@@ -114,7 +114,8 @@ create table customers (
   tags        text[] not null default '{}',
   created_by  uuid references profiles(id),
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  unique (tenant_id, phone)
 );
 create index customers_tenant_idx on customers(tenant_id);
 create index customers_search_idx on customers using gin (full_name gin_trgm_ops, phone gin_trgm_ops);
