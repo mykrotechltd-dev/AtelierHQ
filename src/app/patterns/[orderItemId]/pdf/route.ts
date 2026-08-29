@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { generateSkirtBlock } from "@/lib/pattern/skirtBlock";
-import { generateBodiceBlock } from "@/lib/pattern/bodiceBlock";
+import { GENERATORS } from "@/lib/pattern/blockRegistry";
 import { renderPatternPdf } from "@/lib/pdf/pattern";
-
-const GENERATORS = {
-  skirt: { fn: generateSkirtBlock, label: "Basic skirt block (front)" },
-  bodice: { fn: generateBodiceBlock, label: "Basic bodice block (front)" },
-} as const;
 
 export async function GET(request: NextRequest, { params }: { params: { orderItemId: string } }) {
   const supabase = createServerSupabase();
@@ -23,8 +17,11 @@ export async function GET(request: NextRequest, { params }: { params: { orderIte
   const blockParam = request.nextUrl.searchParams.get("block");
   const block = blockParam && blockParam in GENERATORS ? (blockParam as keyof typeof GENERATORS) : null;
   if (!block) {
-    return NextResponse.json({ error: "Pass ?block=skirt or ?block=bodice" }, { status: 400 });
+    return NextResponse.json({ error: `Pass ?block= one of: ${Object.keys(GENERATORS).join(", ")}` }, { status: 400 });
   }
+
+  const seamParam = request.nextUrl.searchParams.get("seam");
+  const seamAllowanceMM = seamParam ? Math.max(0, Math.min(50, Number(seamParam) || 0)) : 0;
 
   const { data: item } = await supabase
     .from("order_items")
@@ -55,6 +52,7 @@ export async function GET(request: NextRequest, { params }: { params: { orderIte
     blockLabel: label,
     pieces: result.pieces,
     warnings: result.warnings,
+    seamAllowanceMM,
   });
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

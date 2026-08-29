@@ -1,21 +1,21 @@
 import { MeasurementValues, MeasurementUnit, PatternResult, Point, readMM, boundingBoxOfPoints } from "./geometry";
 
-// Basic front torso block — quarter-measurement-plus-ease method, deliberately
-// simplified: straight shoulder line, no armhole curve, no neckline curve, no
-// bust dart. Getting armhole/neckline curves right requires real patternmaking
-// judgment this engine doesn't have, so those are left for a human to add by
-// hand rather than guessed at. Treat this as a torso block starting shape.
-// Seam allowance and a back piece are available separately.
-const DEFAULT_CHEST_EASE_MM = 40;
-const DEFAULT_WAIST_EASE_MM = 20;
-const BUST_LEVEL_FRACTION = 0.4; // rough proportion of bodice length down to the fullest bust point
+// Basic back torso block — same construction as the front block, with less
+// ease at the chest level, reflecting the general convention that a back
+// bodice is narrower than the front at bust level (there's no bust volume
+// on the back). Like the front block: straight lines, no armhole/neckline
+// curve, no shoulder slope — a torso block starting shape, not a finished
+// pattern.
+const DEFAULT_CHEST_EASE_MM = 20; // less than the front block's 40mm — narrower back at bust level
+const DEFAULT_WAIST_EASE_MM = 15;
+const BUST_LEVEL_FRACTION = 0.4;
 
-export type BodiceBlockOptions = { chestEaseMM?: number; waistEaseMM?: number };
+export type BodiceBackBlockOptions = { chestEaseMM?: number; waistEaseMM?: number };
 
-export function generateBodiceBlock(
+export function generateBodiceBackBlock(
   values: MeasurementValues,
   unit: MeasurementUnit,
-  options: BodiceBlockOptions = {}
+  options: BodiceBackBlockOptions = {}
 ): PatternResult {
   const warnings: string[] = [];
   const chestEaseMM = options.chestEaseMM ?? DEFAULT_CHEST_EASE_MM;
@@ -53,12 +53,14 @@ export function generateBodiceBlock(
 
   const points: Point[] = [centerNeck, shoulderPoint, bustPoint, waistPoint, centerWaist];
 
-  warnings.push("Torso block only, straight lines: add armhole curve, neckline curve, shoulder slope, and bust dart by hand before cutting fabric.");
+  warnings.push(
+    "Torso block only, straight lines, narrower ease than the front (a general convention, not measured on your customer): add armhole curve, neckline curve, and shoulder slope by hand before cutting fabric."
+  );
 
   return {
     pieces: [
       {
-        name: "Bodice — Front (basic torso block)",
+        name: "Bodice — Back (basic torso block)",
         pathMM: path,
         points,
         boundingBoxMM: boundingBoxOfPoints(points),

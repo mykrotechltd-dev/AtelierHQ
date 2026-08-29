@@ -1,19 +1,20 @@
 import { MeasurementValues, MeasurementUnit, PatternResult, Point, readMM, boundingBoxOfPoints } from "./geometry";
 
-// Basic front skirt block — quarter-measurement-plus-ease method, the same
-// approach used in most introductory patternmaking courses (e.g. Aldrich's
-// basic block). This is a straight-line/simple-curve DRAFT, not a finished
-// pattern: it has no waist dart. Treat it as a starting shape to true up by
-// hand. Seam allowance and a back piece are available separately.
-const DEFAULT_WAIST_EASE_MM = 10; // total ease split across the quarter measurement
+// Basic back skirt block — identical construction to the front block, with
+// one deliberate difference: less waist ease, reflecting the commonly-taught
+// convention that a back waist is drafted more fitted than the front (the
+// back waist dart typically takes in more than the front). This is a
+// general, widely-published convention, not a measurement-derived number —
+// treat the exact dart intake as a starting point to true up by hand.
+const DEFAULT_WAIST_EASE_MM = 4; // less than the front block's 10mm — more fitted back waist
 const DEFAULT_HIP_EASE_MM = 20;
 
-export type SkirtBlockOptions = { waistEaseMM?: number; hipEaseMM?: number };
+export type SkirtBackBlockOptions = { waistEaseMM?: number; hipEaseMM?: number };
 
-export function generateSkirtBlock(
+export function generateSkirtBackBlock(
   values: MeasurementValues,
   unit: MeasurementUnit,
-  options: SkirtBlockOptions = {}
+  options: SkirtBackBlockOptions = {}
 ): PatternResult {
   const warnings: string[] = [];
   const waistEaseMM = options.waistEaseMM ?? DEFAULT_WAIST_EASE_MM;
@@ -42,12 +43,14 @@ export function generateSkirtBlock(
 
   const points: Point[] = [centerWaist, sideWaist, sideHip, sideHem, centerHem];
 
-  warnings.push("Basic front block only: add a waist dart by hand before cutting fabric.");
+  warnings.push(
+    "Basic back block: same construction as the front with a tighter waist ease (a common but general convention, not measured on your customer) — add a back waist dart by hand before cutting fabric."
+  );
 
   return {
     pieces: [
       {
-        name: "Skirt — Front (basic block)",
+        name: "Skirt — Back (basic block)",
         pathMM: path,
         points,
         boundingBoxMM: boundingBoxOfPoints(points),

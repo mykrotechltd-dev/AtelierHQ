@@ -1,5 +1,6 @@
 import { Document, Page, View, Text, Svg, Path, Line, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import type { PatternPiece } from "@/lib/pattern/geometry";
+import { offsetPolygon, pointsToClosedPathData } from "@/lib/pattern/geometry";
 import {
   computeTileGrid,
   PRINTABLE_WIDTH_MM,
@@ -21,6 +22,8 @@ const styles = StyleSheet.create({
   calibrationCaption: { fontSize: 9, color: "#64748b", marginTop: 6 },
   tilePage: { padding: mm(PAGE_MARGIN_MM), fontFamily: "Helvetica" },
   tileHeader: { fontSize: 9, color: "#64748b", marginBottom: 4 },
+  legend: { flexDirection: "row", marginTop: 4, gap: 12 },
+  legendItem: { fontSize: 8, color: "#64748b" },
 });
 
 export type PatternDocumentData = {
@@ -31,6 +34,8 @@ export type PatternDocumentData = {
   blockLabel: string; // e.g. "Basic skirt block"
   pieces: PatternPiece[];
   warnings: string[];
+  /** Extra distance added outside the seamline, drawn as a second dashed cutting line. 0/undefined = off. */
+  seamAllowanceMM?: number;
 };
 
 function CalibrationSquare() {
@@ -63,6 +68,8 @@ function TileMarks({ tile }: { tile: { x: number; y: number; width: number; heig
 }
 
 export function PatternDocument({ data }: { data: PatternDocumentData }) {
+  const seamAllowanceMM = data.seamAllowanceMM ?? 0;
+
   return (
     <Document>
       <Page size="A4" style={styles.coverPage}>
@@ -90,6 +97,16 @@ export function PatternDocument({ data }: { data: PatternDocumentData }) {
           ))}
         </View>
 
+        {seamAllowanceMM > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.label}>Seam allowance</Text>
+            <Text style={styles.muted}>
+              {seamAllowanceMM}mm added outside the seamline, shown as a dashed cutting line. The offset is a straight-line
+              approximation around curves — true it up by eye where the pattern curves.
+            </Text>
+          </View>
+        )}
+
         {data.warnings.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.label}>Before you cut fabric</Text>
@@ -103,7 +120,20 @@ export function PatternDocument({ data }: { data: PatternDocumentData }) {
       </Page>
 
       {data.pieces.map((piece, pieceIndex) => {
-        const { rows, cols, tiles } = computeTileGrid(piece.boundingBoxMM);
+        const cutPoints = seamAllowanceMM > 0 ? offsetPolygon(piece.points, seamAllowanceMM) : null;
+        const cutPath = cutPoints ? pointsToClosedPathData(cutPoints) : null;
+        // Tile against the larger (cutting-line) bounding box when seam allowance
+        // is on, so the extra line never gets clipped off the printed pages.
+        const tileBbox = cutPoints
+          ? {
+              minX: Math.min(piece.boundingBoxMM.minX, ...cutPoints.map((p) => p[0])),
+              maxX: Math.max(piece.boundingBoxMM.maxX, ...cutPoints.map((p) => p[0])),
+              minY: Math.min(piece.boundingBoxMM.minY, ...cutPoints.map((p) => p[1])),
+              maxY: Math.max(piece.boundingBoxMM.maxY, ...cutPoints.map((p) => p[1])),
+            }
+          : piece.boundingBoxMM;
+        const { rows, cols, tiles } = computeTileGrid(tileBbox);
+
         return tiles.map((tile, tileIndex) => (
           <Page key={`${pieceIndex}-${tileIndex}`} size="A4" style={styles.tilePage}>
             <Text style={styles.tileHeader}>
@@ -111,8 +141,15 @@ export function PatternDocument({ data }: { data: PatternDocumentData }) {
             </Text>
             <Svg width={mm(PRINTABLE_WIDTH_MM)} height={mm(PRINTABLE_HEIGHT_MM)} viewBox={`${tile.x} ${tile.y} ${tile.width} ${tile.height}`}>
               <TileMarks tile={tile} />
+              {cutPath && <Path d={cutPath} stroke="#b45309" strokeWidth={0.5} strokeDasharray="3,2" fill="none" />}
               <Path d={piece.pathMM} stroke="black" strokeWidth={0.6} fill="none" />
             </Svg>
+            {cutPath && (
+              <View style={styles.legend}>
+                <Text style={styles.legendItem}>— Seamline</Text>
+                <Text style={styles.legendItem}>- - Cutting line (+{seamAllowanceMM}mm)</Text>
+              </View>
+            )}
           </Page>
         ));
       })}

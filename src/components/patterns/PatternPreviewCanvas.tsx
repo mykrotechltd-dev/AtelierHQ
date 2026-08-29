@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { generateSkirtBlock } from "@/lib/pattern/skirtBlock";
 import { generateBodiceBlock } from "@/lib/pattern/bodiceBlock";
 import { pieceToStandaloneSvg } from "@/lib/pattern/svgExport";
-import { readMM, type MeasurementValues, type MeasurementUnit } from "@/lib/pattern/geometry";
+import { readMM, offsetPolygon, pointsToClosedPathData, type MeasurementValues, type MeasurementUnit } from "@/lib/pattern/geometry";
 
 // Rendered at this many CSS px per pattern-mm at 100% zoom; the zoom slider
 // scales this, the SVG's viewBox always stays in true millimeters so the
@@ -84,6 +84,7 @@ export function PatternPreviewCanvas({
   const [skirt, setSkirt] = useState<SkirtState>(() => seedSkirtState(initialValues, initialUnit));
   const [bodice, setBodice] = useState<BodiceState>(() => seedBodiceState(initialValues, initialUnit));
   const [zoom, setZoom] = useState(100);
+  const [seamAllowance, setSeamAllowance] = useState(0);
 
   // Slider state is kept in millimeters (matching PatternPiece's own
   // coordinate convention), so it's converted to centimeters here purely to
@@ -106,14 +107,21 @@ export function PatternPreviewCanvas({
   }, [block, skirt, bodice]);
 
   const piece = result.pieces[0];
-  const bbox = piece?.boundingBoxMM;
-  const widthMM = bbox ? bbox.maxX - bbox.minX : 0;
-  const heightMM = bbox ? bbox.maxY - bbox.minY : 0;
+  const cutPoints = piece && seamAllowance > 0 ? offsetPolygon(piece.points, seamAllowance) : null;
+  const cutPath = cutPoints ? pointsToClosedPathData(cutPoints) : null;
+
+  // Expand the viewBox to fit the offset cutting line too, when it's on.
+  const bboxMinX = piece ? Math.min(piece.boundingBoxMM.minX, ...(cutPoints?.map((p) => p[0]) ?? [piece.boundingBoxMM.minX])) : 0;
+  const bboxMinY = piece ? Math.min(piece.boundingBoxMM.minY, ...(cutPoints?.map((p) => p[1]) ?? [piece.boundingBoxMM.minY])) : 0;
+  const bboxMaxX = piece ? Math.max(piece.boundingBoxMM.maxX, ...(cutPoints?.map((p) => p[0]) ?? [piece.boundingBoxMM.maxX])) : 0;
+  const bboxMaxY = piece ? Math.max(piece.boundingBoxMM.maxY, ...(cutPoints?.map((p) => p[1]) ?? [piece.boundingBoxMM.maxY])) : 0;
+  const widthMM = bboxMaxX - bboxMinX;
+  const heightMM = bboxMaxY - bboxMinY;
   const scale = BASE_PX_PER_MM * (zoom / 100);
 
   function handleDownload() {
     if (!piece) return;
-    const svgString = pieceToStandaloneSvg(piece);
+    const svgString = pieceToStandaloneSvg(piece, seamAllowance);
     const blob = new Blob([svgString], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -200,6 +208,22 @@ export function PatternPreviewCanvas({
 
         <div>
           <div className="flex justify-between text-xs text-slate-500">
+            <span>Seam allowance</span>
+            <span>{seamAllowance}mm</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={25}
+            step={1}
+            value={seamAllowance}
+            onChange={(e) => setSeamAllowance(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+
+        <div>
+          <div className="flex justify-between text-xs text-slate-500">
             <span>Zoom</span>
             <span>{zoom}%</span>
           </div>
@@ -214,7 +238,8 @@ export function PatternPreviewCanvas({
       <div>
         <div className="h-[400px] overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
           {piece && (
-            <svg width={widthMM * scale} height={heightMM * scale} viewBox={`${bbox!.minX} ${bbox!.minY} ${widthMM} ${heightMM}`}>
+            <svg width={widthMM * scale} height={heightMM * scale} viewBox={`${bboxMinX} ${bboxMinY} ${widthMM} ${heightMM}`}>
+              {cutPath && <path d={cutPath} stroke="#b45309" strokeWidth={0.5} strokeDasharray="3,2" fill="none" />}
               <path d={piece.pathMM} stroke="#1e293b" strokeWidth={0.6} fill="none" />
             </svg>
           )}

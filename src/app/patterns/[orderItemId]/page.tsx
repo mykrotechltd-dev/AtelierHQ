@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { requireCurrentUser } from "@/lib/utils/tenant";
 import { PatternBlockTabs } from "@/components/patterns/PatternBlockTabs";
+import { PdfDownloadLinks } from "@/components/patterns/PdfDownloadLinks";
 
 export default async function PatternChooserPage({ params }: { params: { orderItemId: string } }) {
   await requireCurrentUser();
@@ -51,30 +52,11 @@ export default async function PatternChooserPage({ params }: { params: { orderIt
 
           <div className="space-y-3">
             <p className="text-sm text-slate-500">
-              These PDFs use the <strong>saved measurement</strong>, not the sliders above. They're <strong>basic front blocks</strong> — a
-              starting draft from a quarter-measurement formula, not a finished pattern. Add armhole/neckline curves, darts, seam allowance,
-              and a back piece by hand before cutting fabric. Full details are on the PDF's cover page.
+              These PDFs use the <strong>saved measurement</strong>, not the sliders above. They're <strong>basic blocks</strong> — a
+              starting draft from a quarter-measurement formula, not a finished pattern. Full caveats for each piece are on the PDF's
+              cover page — the sleeve especially needs hand-truing before cutting.
             </p>
-
-            <a
-              href={`/patterns/${item.id}/pdf?block=skirt`}
-              target="_blank"
-              rel="noreferrer"
-              className="block rounded-lg border border-slate-200 bg-white p-4 hover:border-brand-500 hover:bg-brand-50"
-            >
-              <p className="font-medium text-slate-800">Basic skirt block (front)</p>
-              <p className="text-sm text-slate-500">Uses waist, hip, hip depth, skirt length from the linked measurement.</p>
-            </a>
-
-            <a
-              href={`/patterns/${item.id}/pdf?block=bodice`}
-              target="_blank"
-              rel="noreferrer"
-              className="block rounded-lg border border-slate-200 bg-white p-4 hover:border-brand-500 hover:bg-brand-50"
-            >
-              <p className="font-medium text-slate-800">Basic bodice block (front)</p>
-              <p className="text-sm text-slate-500">Uses bust/chest, waist, shoulder, bodice length from the linked measurement.</p>
-            </a>
+            <PdfDownloadLinks itemId={item.id} />
           </div>
         </div>
       )}

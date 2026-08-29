@@ -7,13 +7,13 @@ import { addMeasurement } from "@/app/(dashboard)/customers/actions";
 // Suggested field sets per garment type — purely a UX shortcut; the schema
 // stores an open jsonb map, so shops can add custom fields for any garment.
 const PRESETS: Record<string, string[]> = {
-  shirt: ["chest", "waist", "shoulder", "sleeve_length", "neck", "shirt_length"],
-  trouser: ["waist", "hip", "inseam", "outseam", "thigh", "ankle"],
+  shirt: ["chest", "waist", "shoulder", "bicep", "sleeve_length", "neck", "shirt_length"],
+  trouser: ["waist", "hip", "rise", "inseam", "outseam", "thigh", "ankle"],
   skirt: ["waist", "hip", "hip_depth", "skirt_length"],
   agbada: ["chest", "shoulder", "sleeve_length", "agbada_length", "neck"],
   suit: ["chest", "waist", "shoulder", "sleeve_length", "jacket_length", "trouser_waist", "inseam"],
-  blouse: ["bust", "waist", "hip", "shoulder", "sleeve_length", "blouse_length"],
-  gown: ["bust", "waist", "hip", "shoulder", "gown_length", "sleeve_length"],
+  blouse: ["bust", "waist", "hip", "shoulder", "bicep", "sleeve_length", "blouse_length"],
+  gown: ["bust", "waist", "hip", "shoulder", "bicep", "gown_length", "sleeve_length"],
   custom: [],
 };
 
