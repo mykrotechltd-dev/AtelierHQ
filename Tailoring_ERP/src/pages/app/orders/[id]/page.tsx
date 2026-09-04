@@ -1,0 +1,619 @@
+import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
+import type { Id, Doc } from "@/convex/_generated/dataModel.d.ts";
+import { toast } from "sonner";
+import { format, parseISO } from "date-fns";
+import PageHeader from "@/components/page-header.tsx";
+import { Button } from "@/components/ui/button.tsx";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import RecordPaymentDialog from "../../payments/_components/record-payment-dialog.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog.tsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.tsx";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
+import { StatusBadge, STATUS_CONFIG, type OrderStatus } from "../_components/status-badge.tsx";
+import { ArrowLeft, ArrowRight, Pencil, Trash2, Plus, User, CalendarDays, FileText, CreditCard, CheckCircle2 } from "lucide-react";
+import InvoiceActions from "../_components/invoice-actions.tsx";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+type OrderDoc = Doc<"orders">;
+type OrderItemDoc = Doc<"orderItems">;
+
+// ---- Item form ----
+const itemSchema = z.object({
+  description: z.string().min(1, "Required"),
+  garmentType: z.string().optional(),
+  fabric: z.string().optional(),
+  quantity: z.string().min(1),
+  unitPrice: z.string().min(1),
+  notes: z.string().optional(),
+});
+type ItemFormValues = z.infer<typeof itemSchema>;
+
+function ItemDialog({
+  open,
+  onClose,
+  orderId,
+  item,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orderId: Id<"orders">;
+  item?: OrderItemDoc;
+}) {
+  const addItem = useMutation(api.orders.addOrderItem);
+  const updateItem = useMutation(api.orders.updateOrderItem);
+  const [saving, setSaving] = useState(false);
+
+  const form = useForm<ItemFormValues>({
+    resolver: zodResolver(itemSchema),
+    defaultValues: {
+      description: item?.description ?? "",
+      garmentType: item?.garmentType ?? "",
+      fabric: item?.fabric ?? "",
+      quantity: item?.quantity?.toString() ?? "1",
+      unitPrice: item?.unitPrice?.toString() ?? "",
+      notes: item?.notes ?? "",
+    },
+  });
+
+  const onSubmit = async (values: ItemFormValues) => {
+    setSaving(true);
+    try {
+      const payload = {
+        description: values.description,
+        garmentType: values.garmentType || undefined,
+        fabric: values.fabric || undefined,
+        quantity: parseFloat(values.quantity),
+        unitPrice: parseFloat(values.unitPrice),
+        notes: values.notes || undefined,
+      };
+      if (item) {
+        await updateItem({ id: item._id, ...payload });
+        toast.success("Item updated");
+      } else {
+        await addItem({ orderId, ...payload });
+        toast.success("Item added");
+      }
+      form.reset();
+      onClose();
+    } catch {
+      toast.error("Failed to save item");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-sans">{item ? "Edit item" : "Add item"}</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="description" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description *</FormLabel>
+                <FormControl><Input placeholder="e.g. Ankara Senator suit" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={form.control} name="garmentType" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Garment type</FormLabel>
+                  <FormControl><Input placeholder="Suit, Dress…" {...field} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="fabric" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Fabric</FormLabel>
+                  <FormControl><Input placeholder="Ankara, Silk…" {...field} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="quantity" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Qty *</FormLabel>
+                  <FormControl><Input type="number" min="1" step="1" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="unitPrice" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Unit price *</FormLabel>
+                  <FormControl><Input type="number" min="0" step="0.01" placeholder="0.00" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl><Input placeholder="Special instructions…" {...field} /></FormControl>
+              </FormItem>
+            )} />
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? "Saving…" : item ? "Save changes" : "Add item"}</Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Edit order meta dialog ----
+const editSchema = z.object({
+  dueDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+type EditFormValues = z.infer<typeof editSchema>;
+
+function EditOrderDialog({
+  open,
+  onClose,
+  order,
+}: {
+  open: boolean;
+  onClose: () => void;
+  order: OrderDoc;
+}) {
+  const updateOrder = useMutation(api.orders.updateOrder);
+  const [saving, setSaving] = useState(false);
+  const form = useForm<EditFormValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: { dueDate: order.dueDate ?? "", notes: order.notes ?? "" },
+  });
+
+  const onSubmit = async (values: EditFormValues) => {
+    setSaving(true);
+    try {
+      await updateOrder({ id: order._id, dueDate: values.dueDate || undefined, notes: values.notes || undefined });
+      toast.success("Order updated");
+      onClose();
+    } catch { toast.error("Failed to update order"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle className="font-sans">Edit order</DialogTitle></DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="dueDate" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Due date</FormLabel>
+                <FormControl><Input type="date" {...field} /></FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl><Textarea rows={3} {...field} /></FormControl>
+              </FormItem>
+            )} />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Main page ----
+export default function OrderDetailPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<OrderItemDoc | undefined>(undefined);
+  const [editOrderOpen, setEditOrderOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+
+  const advanceStatus = useMutation(api.orders.advanceOrderStatus);
+  const deleteItem = useMutation(api.orders.deleteOrderItem);
+  const deleteOrder = useMutation(api.orders.deleteOrder);
+
+  const order = useQuery(
+    api.orders.getOrder,
+    id ? { id: id as Id<"orders"> } : "skip"
+  );
+  const paymentSummary = useQuery(
+    api.payments.getPaymentsByOrder,
+    id ? { orderId: id as Id<"orders"> } : "skip"
+  );
+  const deletePayment = useMutation(api.payments.deletePayment);
+
+  const handleAdvance = async () => {
+    if (!id) return;
+    try {
+      await advanceStatus({ id: id as Id<"orders"> });
+      toast.success("Status updated");
+    } catch { toast.error("Could not update status"); }
+  };
+
+  const handleDeleteItem = async (itemId: Id<"orderItems">) => {
+    try {
+      await deleteItem({ id: itemId });
+      toast.success("Item removed");
+    } catch { toast.error("Failed to remove item"); }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!id) return;
+    try {
+      await deleteOrder({ id: id as Id<"orders"> });
+      toast.success("Order deleted");
+      navigate("/orders", { replace: true });
+    } catch { toast.error("Failed to delete order"); }
+  };
+
+  if (order === undefined) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  }
+
+  const statusCfg = STATUS_CONFIG[order.status as OrderStatus];
+
+  return (
+    <div className="p-6 max-w-3xl mx-auto">
+      <button
+        onClick={() => navigate("/orders")}
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 font-body cursor-pointer"
+      >
+        <ArrowLeft className="size-4" /> All orders
+      </button>
+
+      <PageHeader title={order.orderNumber}>
+        <InvoiceActions orderId={id as Id<"orders">} />
+        <Button size="sm" variant="secondary" onClick={() => setEditOrderOpen(true)}>
+          <Pencil className="size-3.5 mr-1" /> Edit
+        </Button>
+        {statusCfg.nextLabel && (
+          <Button size="sm" onClick={handleAdvance}>
+            {statusCfg.nextLabel} <ArrowRight className="size-3.5 ml-1" />
+          </Button>
+        )}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="destructive"><Trash2 className="size-3.5" /></Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete order {order.orderNumber}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently deletes the order and all its items. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-white hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </PageHeader>
+
+      {/* Status + meta */}
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap gap-4 items-start">
+            <div>
+              <p className="text-xs text-muted-foreground font-body mb-1">Status</p>
+              <StatusBadge status={order.status} />
+            </div>
+            {order.customer && (
+              <div>
+                <p className="text-xs text-muted-foreground font-body mb-1">Customer</p>
+                <button
+                  onClick={() => navigate(`/customers/${order.customer!._id}`)}
+                  className="flex items-center gap-1 text-sm font-body text-primary hover:underline cursor-pointer"
+                >
+                  <User className="size-3.5" /> {order.customer.name}
+                </button>
+              </div>
+            )}
+            {order.dueDate && (
+              <div>
+                <p className="text-xs text-muted-foreground font-body mb-1">Due</p>
+                <span className="flex items-center gap-1 text-sm font-body">
+                  <CalendarDays className="size-3.5 text-muted-foreground" />
+                  {format(parseISO(order.dueDate), "dd MMM yyyy")}
+                </span>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground font-body mb-1">Total</p>
+              <span className="font-sans font-semibold text-base">
+                {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+          {order.notes && (
+            <div className="flex items-start gap-2 mt-3 pt-3 border-t border-border">
+              <FileText className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+              <p className="text-sm text-muted-foreground font-body">{order.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Items */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-sans text-sm text-muted-foreground uppercase tracking-wide">
+              Items ({order.items.length})
+            </CardTitle>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => { setEditingItem(undefined); setItemDialogOpen(true); }}
+            >
+              <Plus className="size-3.5 mr-1" /> Add item
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {order.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground font-body">No items yet — add one above.</p>
+          ) : (
+            order.items.map((item) => (
+              <div
+                key={item._id}
+                className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-body text-sm font-medium text-foreground truncate">{item.description}</p>
+                  <div className="flex flex-wrap gap-x-3 mt-0.5">
+                    {item.garmentType && (
+                      <span className="text-xs text-muted-foreground font-body">{item.garmentType}</span>
+                    )}
+                    {item.fabric && (
+                      <span className="text-xs text-muted-foreground font-body">{item.fabric}</span>
+                    )}
+                    <span className="text-xs text-muted-foreground font-body">
+                      Qty: {item.quantity} × {item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {item.notes && (
+                    <p className="text-xs text-muted-foreground font-body mt-0.5 italic">{item.notes}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-sans font-semibold text-sm">
+                    {(item.quantity * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <button
+                    onClick={() => { setEditingItem(item); setItemDialogOpen(true); }}
+                    className="text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="text-destructive hover:text-destructive/80 cursor-pointer">
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove item?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Remove &quot;{item.description}&quot; from this order?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteItem(item._id)}
+                          className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                          Remove
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))
+          )}
+
+          {/* Total row */}
+          {order.items.length > 0 && (
+            <div className="flex justify-end pt-2 border-t border-border">
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground font-body">Order total</p>
+                <p className="font-sans font-bold text-lg">
+                  {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Payments & Balance */}
+      <Card className="mt-4">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-sans text-sm text-muted-foreground uppercase tracking-wide">
+              Payments & Balance
+            </CardTitle>
+            {paymentSummary && paymentSummary.outstanding > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setPaymentDialogOpen(true)}
+              >
+                <CreditCard className="size-3.5 mr-1" /> Record payment
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {paymentSummary === undefined ? (
+            <Skeleton className="h-16 w-full" />
+          ) : (
+            <>
+              {/* Balance summary row */}
+              <div className="flex flex-wrap gap-4 rounded-md bg-muted px-4 py-3">
+                <div>
+                  <p className="text-xs font-body text-muted-foreground">Order total</p>
+                  <p className="font-sans font-semibold text-sm">
+                    {paymentSummary.orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-body text-muted-foreground">Paid</p>
+                  <p className="font-sans font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                    {paymentSummary.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-body text-muted-foreground">Outstanding</p>
+                  <p className={`font-sans font-semibold text-sm ${paymentSummary.outstanding > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {paymentSummary.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {paymentSummary.outstanding === 0 && (
+                  <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="size-4" />
+                    <span className="text-xs font-body font-medium">Fully paid</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment history */}
+              {paymentSummary.payments.length === 0 ? (
+                <p className="text-sm text-muted-foreground font-body">
+                  No payments recorded yet.{" "}
+                  <button
+                    onClick={() => setPaymentDialogOpen(true)}
+                    className="text-primary hover:underline cursor-pointer"
+                  >
+                    Record the first payment
+                  </button>
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {paymentSummary.payments.map((p) => (
+                    <div
+                      key={p._id}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-body text-muted-foreground">
+                          {format(parseISO(p.paidAt), "dd MMM yyyy")}
+                        </span>
+                        <span className="text-xs font-body px-2 py-0.5 rounded-full bg-muted capitalize">
+                          {p.method.replace("_", " ")}
+                        </span>
+                        {p.notes && (
+                          <span className="text-xs font-body text-muted-foreground italic truncate max-w-[180px]">
+                            {p.notes}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-sans font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                          +{p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="text-destructive hover:text-destructive/80 cursor-pointer">
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete payment?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Remove this payment of{" "}
+                                {p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}?
+                                This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deletePayment({ id: p._id })}
+                                className="bg-destructive text-white hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <ItemDialog
+        open={itemDialogOpen}
+        onClose={() => { setItemDialogOpen(false); setEditingItem(undefined); }}
+        orderId={id as Id<"orders">}
+        item={editingItem}
+      />
+      <EditOrderDialog
+        open={editOrderOpen}
+        onClose={() => setEditOrderOpen(false)}
+        order={order}
+      />
+      {paymentDialogOpen && paymentSummary !== undefined && (
+        <RecordPaymentDialog
+          open={paymentDialogOpen}
+          onClose={() => setPaymentDialogOpen(false)}
+          orderId={id as Id<"orders">}
+          orderNumber={order.orderNumber}
+          outstanding={paymentSummary.outstanding}
+        />
+      )}
+    </div>
+  );
+}
