@@ -75,6 +75,16 @@ export function alongBy(from: Point, to: Point, length: number): Point {
   return lerp(from, to, length / d);
 }
 
+/** The angle from `a` to `b`, in radians (`atan2`). */
+export function angleBetween(a: Point, b: Point): number {
+  return Math.atan2(b.y - a.y, b.x - a.x);
+}
+
+/** A point `dist` from `origin`, along `angle` radians. */
+export function pointAtAngle(origin: Point, angle: number, dist: number): Point {
+  return { x: origin.x + dist * Math.cos(angle), y: origin.y + dist * Math.sin(angle) };
+}
+
 /**
  * A point at `length` from `from`, dropping exactly `drop` vertically.
  *

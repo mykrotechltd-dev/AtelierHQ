@@ -74,11 +74,33 @@ const ALL_FIELDS: MeasField[] = [
   { key: "neck", label: "Neck", hint: "Neck circumference (optional)" },
   { key: "thigh", label: "Thigh", hint: "Upper thigh circumference (optional)" },
   { key: "height", label: "Height", hint: "Full body height" },
+  // Lety Antony / Helen Joseph-Armstrong bodice method — all optional, and
+  // estimated from the fields above when left blank (see bodice-calculator.ts).
+  { key: "shoulderDrop", label: "Shoulder drop", hint: "Shoulder-top line down to the true shoulder tip (optional)" },
+  { key: "bustDepth", label: "Bust depth", hint: "Neck point down to the bust apex (optional)" },
+  { key: "centerFrontLength", label: "Centre front length", hint: "Neck pit to waist, straight down centre front (optional)" },
+  { key: "acrossChestWidth", label: "Across chest", hint: "Full across-chest width at armhole depth (optional)" },
+  { key: "centerBackLength", label: "Centre back length", hint: "Nape to waist, straight down centre back (optional)" },
+  { key: "acrossBackWidth", label: "Across back", hint: "Full across-back width at armhole depth (optional)" },
+  { key: "sideSeamLength", label: "Side seam length", hint: "Underarm to waist (optional, shared by front and back)" },
 ];
 
 const FIELDS_BY_BLOCK: Record<string, (keyof Measurements)[]> = {
   skirt: ["waist", "hips", "height"],
-  bodice: ["chest", "waist", "shoulder", "neck", "height"],
+  bodice: [
+    "chest",
+    "waist",
+    "shoulder",
+    "neck",
+    "height",
+    "shoulderDrop",
+    "bustDepth",
+    "centerFrontLength",
+    "acrossChestWidth",
+    "centerBackLength",
+    "acrossBackWidth",
+    "sideSeamLength",
+  ],
   trouser: ["waist", "hips", "inseam", "thigh", "height"],
   sleeve: ["shoulder", "sleeveLength", "chest"],
   dress: ["chest", "waist", "hips", "shoulder", "neck", "height"],
@@ -294,6 +316,9 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
   const [ease, setEase] = useState<EasePreset>("standard");
   const [skirtLength, setSkirtLength] = useState("60");
   const [dressLength, setDressLength] = useState("70");
+  // Bodice construction toggles (Lety Antony / Helen Joseph-Armstrong method).
+  const [bodiceShoulderDart, setBodiceShoulderDart] = useState(true);
+  const [bodiceSwayback, setBodiceSwayback] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
   // Curve editing state
@@ -337,8 +362,10 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
         skirtLength: parseFloat(skirtLength) || 60,
         dressLength: parseFloat(dressLength) || 70,
         ease,
+        bodiceShoulderDart,
+        bodiceSwayback,
       }).filter((b) => entry.blocks.includes(b.id)),
-    [resolvedMeasurements, skirtLength, dressLength, ease, entry.blocks]
+    [resolvedMeasurements, skirtLength, dressLength, ease, bodiceShoulderDart, bodiceSwayback, entry.blocks]
   );
 
   // Apply any user curve edits on top of engine-generated paths
@@ -666,6 +693,31 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     Waist to hem. Default 70 cm (below the knee).
                   </p>
+                </div>
+              )}
+
+              {/* Bodice construction toggles (bodice/dress only) */}
+              {(entry.id === "bodice" || entry.id === "dress") && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium block">Back bodice construction</Label>
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={bodiceShoulderDart}
+                      onChange={(e) => setBodiceShoulderDart(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    Shoulder dart (shoulder-blade shaping)
+                  </label>
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={bodiceSwayback}
+                      onChange={(e) => setBodiceSwayback(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    Swayback contour (curved centre-back waist)
+                  </label>
                 </div>
               )}
             </CardContent>

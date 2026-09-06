@@ -4,10 +4,21 @@
  * This layer owns no drafting decisions. Every coordinate comes from the
  * calculator, so changing the drafting method never touches rendering, and
  * changing how a curve is drawn never moves a drafted point.
+ *
+ * The outline traversal and curve-handle formulas below are ported from
+ * PatternLab's `src/components/patterns/FrontBodiceDashboard.tsx`
+ * (`buildFrontPath`/`frontCurveHandles`, `buildBackPath`/`backCurveHandles`).
+ * The handle formulas are expressed here as point-to-point differences and
+ * `pointAtAngle` calls rather than the source's raw signed offsets — both
+ * forms are numerically identical (verified point-for-point against the
+ * source's own raw, Y-up formulas when this file was written), but
+ * expressing them as differences between this engine's own named points
+ * avoids re-deriving a sign convention by hand at every call site.
  */
 
-import { BODICE, RENDER } from "./constants.ts";
+import { BODICE } from "./constants.ts";
 import { boundsOf, path } from "./geometry.ts";
+import { angleBetween, distance, pointAtAngle } from "./points.ts";
 import type { BodiceDraft } from "./bodice-calculator.ts";
 import type { Point } from "./types.ts";
 import {
@@ -18,108 +29,125 @@ import {
   type PatternPath,
 } from "./types.ts";
 
-/**
- * Armhole as a cubic Bézier from the shoulder tip, past the across-back point,
- * into the underarm.
- *
- * The control points are placed as fractions of the box between the shoulder tip
- * and the underarm, so they can never fall outside it. That is what keeps the
- * armhole scooping inward instead of bulging past the side seam.
- */
-function armholeSegment(shoulder: Point, widthPoint: Point, underarm: Point): string {
-  const w = Math.max(underarm.x - shoulder.x, 0.1);
-  const h = Math.max(underarm.y - shoulder.y, 0.1);
-  const c = BODICE.armholeCurve;
-
-  // First control point pulls the curve down off the shoulder and slightly in
-  // toward the across-back point, keeping the upper armhole near-vertical.
-  const cp1x = shoulder.x + w * c.upperInsetFraction;
-  const cp1y = shoulder.y + h * c.upperHeightFraction;
-  // Second control point sits at underarm level, pulled outward so the curve
-  // arrives flat rather than at an angle.
-  const cp2x = shoulder.x + w * c.lowerOutsetFraction;
-  const cp2y = underarm.y;
-
-  return `C ${round(cp1x)} ${round(cp1y)} ${round(cp2x)} ${round(cp2y)} ${round(underarm.x)} ${round(underarm.y)}`;
-}
-
 function round(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
-/** Builds the closed outline, routing around the bust dart on the front. */
-function buildOutline(draft: BodiceDraft): string {
-  const p = draft.points;
-  const b = path();
+// ── Front outline — ported from buildFrontPath / frontCurveHandles ───────────
 
-  // Centre line up from waist, then the neckline curve out to the neck point.
-  b.moveToPoint(p.centreWaist).lineToPoint(p.centreNeck);
+function frontOutline(draft: BodiceDraft): string {
+  const p = draft.front!;
+  const c = BODICE.curve;
 
-  if (draft.panel === "front") {
-    // Front neckline scoops: control at the corner gives a rounded curve.
-    b.quadTo(p.centreNeck.x, p.centreNeck.y, p.neckPoint.x, p.neckPoint.y);
-  } else {
-    // The back neck is nearly straight, with a shallow curve near centre back.
-    b.quadTo(p.neckPoint.x * 0.5, p.centreNeck.y, p.neckPoint.x, p.neckPoint.y);
-  }
+  const neckWidthPx = Math.abs(p.neckPoint.x - p.centreNeck.x);
+  const neckDepth = Math.abs(p.neckPoint.y - p.centreNeck.y);
+  const distGI = Math.abs(p.shoulderPoint.y - p.acrossChestPoint.y);
+  const distIK = Math.abs(p.acrossChestPoint.y - p.underarm.y);
+  const armscyeWidth = Math.abs(p.underarm.x - p.acrossChestPoint.x);
 
-  // Shoulder seam, split by the shoulder dart on the back.
-  if (draft.panel === "back" && draft.shoulderDart && draft.shoulderDart.intake > 0) {
-    const d = draft.shoulderDart;
-    b.lineToPoint(d.legStart).lineToPoint(d.apex).lineToPoint(d.legEnd).lineToPoint(p.shoulderPoint);
+  // cRight, fLeft: neckline curve (C -> F). gRight, iLeft, iRight, kLeft:
+  // armhole curve (G -> I -> K).
+  const cRight: Point = { x: p.centreNeck.x + neckWidthPx * c.frontNeckRightFraction, y: p.centreNeck.y };
+  const fLeft: Point = { x: p.neckPoint.x, y: p.neckPoint.y + neckDepth * c.frontNeckLeftFraction };
+  const gRight = pointAtAngle(
+    p.shoulderPoint,
+    angleBetween(p.shoulderPoint, p.acrossChestPoint),
+    distGI * c.frontArmholeUpperFraction
+  );
+  const iLeft: Point = { x: p.acrossChestPoint.x, y: p.acrossChestPoint.y - distGI * c.frontArmholeUpperFraction };
+  const iRight: Point = { x: p.acrossChestPoint.x, y: p.acrossChestPoint.y + distIK * c.frontArmholeLowerFraction };
+  const kLeft: Point = { x: p.underarm.x - armscyeWidth * c.frontUnderarmFraction, y: p.underarm.y };
+
+  // Traversal order, ported verbatim from buildFrontPath: C -> F (curve) ->
+  // G (line) -> I (curve) -> K (curve) -> N (line) -> P (line) -> H (line)
+  // -> J1 (line) -> B (line) -> close. The bust dart is welded into the
+  // cutting line as a V-notch (N -> P -> H -> J1), not drawn separately.
+  return path()
+    .moveToPoint(p.centreNeck)
+    .cubicTo(cRight.x, cRight.y, fLeft.x, fLeft.y, p.neckPoint.x, p.neckPoint.y)
+    .lineToPoint(p.shoulderPoint)
+    .cubicTo(gRight.x, gRight.y, iLeft.x, iLeft.y, p.acrossChestPoint.x, p.acrossChestPoint.y)
+    .cubicTo(iRight.x, iRight.y, kLeft.x, kLeft.y, p.underarm.x, p.underarm.y)
+    .lineToPoint(p.waistSide)
+    .lineToPoint(p.dartLegApex)
+    .lineToPoint(p.bustPoint)
+    .lineToPoint(p.dartLegBase)
+    .lineToPoint(p.centreWaist)
+    .close()
+    .toString();
+}
+
+// ── Back outline — ported from buildBackPath / backCurveHandles ──────────────
+
+function backOutline(draft: BodiceDraft): string {
+  const p = draft.back!;
+  const c = BODICE.curve;
+  const dart = draft.shoulderDart as (BodiceDraft["shoulderDart"] & { throat?: Point }) | undefined;
+
+  const distER = Math.abs(p.shoulderPoint.y - p.acrossBackPoint.y);
+  const distRO = Math.abs(p.acrossBackPoint.y - p.underarm.y);
+  const widthRO = Math.abs(p.underarm.x - p.acrossBackPoint.x);
+
+  const cRight: Point = {
+    x: p.centreNeck.x + (p.neckPoint.x - p.centreNeck.x) * c.backNeckFraction,
+    y: p.centreNeck.y,
+  };
+  const rLeft: Point = { x: p.acrossBackPoint.x, y: p.acrossBackPoint.y - distER * c.backArmholeUpperFraction };
+  const rRight: Point = { x: p.acrossBackPoint.x, y: p.acrossBackPoint.y + distRO * c.backArmholeLowerFraction };
+  const e1Right = pointAtAngle(
+    p.shoulderPoint,
+    angleBetween(p.shoulderPoint, p.acrossBackPoint),
+    distER * c.backArmholeUpperFraction
+  );
+  const oLeft: Point = { x: p.underarm.x + widthRO * c.backArmholeLowerFraction, y: p.underarm.y };
+
+  // Traversal, ported verbatim from buildBackPath: C -> F (curve) -> [shoulder
+  // dart legs P1 -> Q -> P2, when enabled] -> E1/shoulderPoint (line) -> R
+  // (curve) -> O (curve) -> K -> H -> J -> G1 -> B (lines) -> close.
+  const b = path().moveToPoint(p.centreNeck);
+  b.cubicTo(cRight.x, cRight.y, p.neckPoint.x, p.neckPoint.y, p.neckPoint.x, p.neckPoint.y);
+
+  if (dart && dart.intake > 0 && dart.throat) {
+    b.lineToPoint(dart.legStart).lineToPoint(dart.throat).lineToPoint(dart.legEnd).lineToPoint(p.shoulderPoint);
   } else {
     b.lineToPoint(p.shoulderPoint);
   }
 
-  // Armhole down to the underarm.
-  b.append(armholeSegment(p.shoulderPoint, p.widthPoint, p.underarm));
-
-  // Front: the side bust dart interrupts the side seam at the underarm.
-  if (draft.panel === "front" && draft.bustDart && draft.bustDart.intake > 0) {
-    const d = draft.bustDart;
-    b.lineToPoint(d.apex).lineToPoint(d.legEnd);
-  }
-
-  // Side seam into the waist, then back along the waistline to the centre.
-  b.lineToPoint(p.waistSide).lineToPoint(p.centreWaist).close();
+  b.cubicTo(e1Right.x, e1Right.y, rLeft.x, rLeft.y, p.acrossBackPoint.x, p.acrossBackPoint.y)
+    .cubicTo(rRight.x, rRight.y, oLeft.x, oLeft.y, p.underarm.x, p.underarm.y)
+    .lineToPoint(p.waistSideTop)
+    .lineToPoint(p.sideSeamBase)
+    .lineToPoint(p.waistDartLeg)
+    .lineToPoint(p.waistDartFoot)
+    .lineToPoint(p.centreWaist)
+    .close();
 
   return b.toString();
 }
 
 /** Construction lines: the framework the draft was built on. */
 function buildConstruction(draft: BodiceDraft): PatternPath[] {
-  const p = draft.points;
   const out: PatternPath[] = [];
+  const isFront = draft.panel === "front";
+  const p = isFront ? draft.front! : draft.back!;
+  const underarm = p.underarm;
 
-  // Bust / armhole depth level.
+  // Underarm/bust level, across from the centre line.
   out.push({
-    d: path().moveTo(0, p.centreArmhole.y).lineTo(p.underarm.x, p.underarm.y).toString(),
+    d: path().moveTo(0, underarm.y).lineTo(underarm.x, underarm.y).toString(),
     type: "construction",
   });
 
   // Waist level.
   out.push({
-    d: path().moveTo(0, p.centreWaist.y).lineTo(p.waistSide.x, p.waistSide.y).toString(),
+    d: path().moveTo(0, p.centreWaist.y).lineTo(p.centreWaist.x, p.centreWaist.y).toString(),
     type: "construction",
   });
 
-  // Across back / across chest vertical, showing where the armhole is shaped.
-  out.push({
-    d: path().moveTo(p.widthPoint.x, 0).lineTo(p.widthPoint.x, p.widthPoint.y).toString(),
-    type: "construction",
-  });
-
-  if (p.bustPoint) {
-    // Bust point cross-hair, the pivot for all front dart manipulation.
-    const bp = p.bustPoint;
-    out.push({
-      d: path().moveTo(bp.x - 1, bp.y).lineTo(bp.x + 1, bp.y).toString(),
-      type: "construction",
-    });
-    out.push({
-      d: path().moveTo(bp.x, bp.y - 1).lineTo(bp.x, bp.y + 1).toString(),
-      type: "construction",
-    });
+  if (isFront && draft.front) {
+    const bp = draft.front.bustPoint;
+    out.push({ d: path().moveTo(bp.x - 1, bp.y).lineTo(bp.x + 1, bp.y).toString(), type: "construction" });
+    out.push({ d: path().moveTo(bp.x, bp.y - 1).lineTo(bp.x, bp.y + 1).toString(), type: "construction" });
   }
 
   return out;
@@ -128,23 +156,7 @@ function buildConstruction(draft: BodiceDraft): PatternPath[] {
 /** Dart paths: the legs and apex, drawn so they can be traced onto fabric. */
 function buildDarts(draft: BodiceDraft): PatternPath[] {
   const out: PatternPath[] = [];
-  const { waistDart } = draft;
 
-  // Waist dart: legs from the waistline up to the apex.
-  if (waistDart.intake > 0 && waistDart.height > 0) {
-    const waistY = draft.points.centreWaist.y;
-    const half = waistDart.intake / 2;
-    out.push({
-      d: path()
-        .moveTo(waistDart.x - half, waistY)
-        .lineTo(waistDart.x, waistY - waistDart.height)
-        .lineTo(waistDart.x + half, waistY)
-        .toString(),
-      type: "dart",
-    });
-  }
-
-  // Bust dart legs, radiating from the apex.
   if (draft.bustDart && draft.bustDart.intake > 0) {
     const d = draft.bustDart;
     out.push({
@@ -153,7 +165,6 @@ function buildDarts(draft: BodiceDraft): PatternPath[] {
     });
   }
 
-  // Shoulder dart legs.
   if (draft.shoulderDart && draft.shoulderDart.intake > 0) {
     const d = draft.shoulderDart;
     out.push({
@@ -166,8 +177,8 @@ function buildDarts(draft: BodiceDraft): PatternPath[] {
 }
 
 function buildLabels(draft: BodiceDraft): PatternLabel[] {
-  const p = draft.points;
   const isFront = draft.panel === "front";
+  const p = isFront ? draft.front! : draft.back!;
   const midX = p.underarm.x * 0.45;
   const len = p.centreWaist.y;
 
@@ -179,7 +190,7 @@ function buildLabels(draft: BodiceDraft): PatternLabel[] {
       anchor: "middle",
       fontSize: 4.5,
     },
-    { x: 1, y: p.centreArmhole.y - 1.2, text: "Bust line", anchor: "start", fontSize: 3 },
+    { x: 1, y: p.underarm.y - 1.2, text: "Bust line", anchor: "start", fontSize: 3 },
     {
       x: -0.5,
       y: len / 2,
@@ -190,10 +201,10 @@ function buildLabels(draft: BodiceDraft): PatternLabel[] {
     },
   ];
 
-  if (p.bustPoint) {
+  if (isFront && draft.front) {
     labels.push({
-      x: p.bustPoint.x + 1.5,
-      y: p.bustPoint.y - 1.2,
+      x: draft.front.bustPoint.x + 1.5,
+      y: draft.front.bustPoint.y - 1.2,
       text: "BP",
       anchor: "start",
       fontSize: 3,
@@ -206,18 +217,19 @@ function buildLabels(draft: BodiceDraft): PatternLabel[] {
 function buildNotes(draft: BodiceDraft): string[] {
   const c = draft.calc;
   const r = draft.resolved;
+  const isFront = draft.panel === "front";
+
   const notes = [
-    `Armhole depth: ${c.armholeDepth.toFixed(1)} cm · Bodice length: ${r.bodiceLength.toFixed(1)} cm`,
-    `Bust quarter: ${c.bustQuarter.toFixed(1)} cm · Waist quarter: ${c.waistQuarter.toFixed(1)} cm`,
-    `Ease: ${c.easeBust.toFixed(1)} cm bust, ${c.easeWaist.toFixed(1)} cm waist (total)`,
-    `Shoulder seam: ${r.shoulderLen.toFixed(1)} cm at ${c.shoulderSlopeDrop} cm slope`,
-    `Waist suppression: ${c.waistSuppression.toFixed(1)} cm — ${c.sideSeamIntake.toFixed(1)} cm at the side seam, ${c.waistDartIntake.toFixed(1)} cm in the dart`,
+    `Bodice length: ${(isFront ? r.frontBodiceLength : r.backBodiceLength).toFixed(1)} cm · Side seam: ${r.sideSeamLength.toFixed(1)} cm`,
+    `Shoulder seam: ${r.shoulderLen.toFixed(1)} cm at ${r.shoulderDrop.toFixed(1)} cm drop · Neck width: ${c.neckWidth.toFixed(1)} cm`,
   ];
 
+  if (isFront) {
+    notes.push(`Armhole ease: ${c.armholeEase.toFixed(1)} cm (tiered by bust) · Bust depth: ${r.bustDepth.toFixed(1)} cm`);
+  }
+
   if (draft.bustDart) {
-    notes.push(
-      `Bust dart: ${draft.bustDart.intake.toFixed(1)} cm intake, rotated ${((draft.bustDart.angle * 180) / Math.PI).toFixed(1)}° around the bust point`
-    );
+    notes.push(`Bust dart: ${draft.bustDart.intake.toFixed(1)} cm intake, welded into the cutting line at the apex`);
   }
   if (draft.shoulderDart) {
     notes.push(`Shoulder dart: ${draft.shoulderDart.intake.toFixed(1)} cm intake for shoulder-blade shaping`);
@@ -232,8 +244,9 @@ function buildNotes(draft: BodiceDraft): string[] {
 export function buildBodiceBlock(draft: BodiceDraft): PatternBlock {
   const isFront = draft.panel === "front";
   const id: BlockType = isFront ? "bodice-front" : "bodice-back";
+  const p = isFront ? draft.front! : draft.back!;
 
-  const outline = buildOutline(draft);
+  const outline = isFront ? frontOutline(draft) : backOutline(draft);
   const paths: PatternPath[] = [
     { d: outline, type: "outline" },
     ...buildConstruction(draft),
@@ -241,8 +254,8 @@ export function buildBodiceBlock(draft: BodiceDraft): PatternBlock {
   ];
 
   // Grainline runs parallel to the centre line.
-  const gx = draft.points.underarm.x * BODICE.grainlinePositionRatio;
-  const len = draft.points.centreWaist.y;
+  const gx = p.underarm.x * BODICE.grainlinePositionRatio;
+  const len = p.centreWaist.y;
   paths.push({
     d: path()
       .moveTo(gx, len * BODICE.grainlineInsetRatio)
@@ -286,13 +299,12 @@ export function buildBodiceBlock(draft: BodiceDraft): PatternBlock {
   return {
     id,
     name: BLOCK_LABELS[id],
-    // Bounds measured from the geometry actually drawn, so nothing clips.
-    viewBox: boundsOf(paths.map((p) => p.d), RENDER.viewBoxPadding),
+    viewBox: boundsOf(paths.map((path) => path.d), 3),
     paths,
     labels: buildLabels(draft),
     notes: buildNotes(draft),
     diagnostics,
-    calculations: { ...draft.calc },
+    calculations: { ...draft.calc } as unknown as Record<string, number>,
     estimates: draft.estimates,
     metadata: {
       garment: "bodice",
@@ -301,10 +313,13 @@ export function buildBodiceBlock(draft: BodiceDraft): PatternBlock {
       measurements: {
         chest: draft.resolved.bust,
         waist: draft.resolved.waist,
-        neck: draft.resolved.neck,
         shoulder: draft.resolved.shoulderLen,
       },
     },
     missingMeasurements: [],
   };
 }
+
+// Re-exported for callers that measure distances between the new named
+// points (e.g. tests asserting side-seam length matches between panels).
+export { distance };

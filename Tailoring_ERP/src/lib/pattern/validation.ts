@@ -37,6 +37,13 @@ export const MEASUREMENT_LABELS: Record<MeasurementKey, string> = {
   backWidth: "Across back",
   bustPointSep: "Bust point separation",
   shoulderToBust: "Shoulder to bust point",
+  shoulderDrop: "Shoulder drop",
+  bustDepth: "Bust depth",
+  centerFrontLength: "Centre front length",
+  acrossChestWidth: "Across chest",
+  centerBackLength: "Centre back length",
+  acrossBackWidth: "Across back",
+  sideSeamLength: "Side seam length",
 };
 
 export function labelFor(field: MeasurementKey): string {

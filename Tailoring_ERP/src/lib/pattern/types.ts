@@ -50,6 +50,26 @@ export type Measurements = {
   bustPointSep?: number;
   /** Neck point to bust point. The bust dart pivots around this. */
   shoulderToBust?: number;
+
+  // ── Lety Antony / Helen Joseph-Armstrong bodice method (ported from
+  // PatternLab's FrontBodiceDashboard.tsx) — all optional, estimated from
+  // the fields above when not measured, same as every other field here.
+  /** Vertical drop from the shoulder-width line to the true shoulder tip. */
+  shoulderDrop?: number;
+  /** Neck point down to the bust apex. */
+  bustDepth?: number;
+  /** Centre front, neck pit to waist — distinct from `frontNeckToWaist`,
+   *  which is measured over the bust; this method's own construction length. */
+  centerFrontLength?: number;
+  /** Half of the across-chest measurement, at armhole-depth level. */
+  acrossChestWidth?: number;
+  /** Centre back, nape to waist, for this method's own construction. */
+  centerBackLength?: number;
+  /** Half of the across-back measurement. Estimated from shoulder width when absent. */
+  acrossBackWidth?: number;
+  /** Underarm to waist, taken directly (both blocks share one value so the
+   *  front and back side seams match by construction). */
+  sideSeamLength?: number;
 };
 
 /** Every key of `Measurements`, for validation and missing-field reporting. */
@@ -219,4 +239,13 @@ export type BlockOptions = {
   /** Waist-to-hem length of the skirt portion of a dress (cm). */
   dressLength?: number;
   ease?: EasePreset;
+
+  // ── Bodice construction toggles (Lety Antony / Helen Joseph-Armstrong
+  // method, ported from PatternLab's FrontBodiceDashboard.tsx) — construction
+  // choices the tailor makes per garment, not body measurements, so they sit
+  // here alongside `ease` rather than on `Measurements`.
+  /** Back shoulder dart for shoulder-blade shaping. Defaults on. */
+  bodiceShoulderDart?: boolean;
+  /** Contoured (swayback) centre-back waist. Defaults on. */
+  bodiceSwayback?: boolean;
 };

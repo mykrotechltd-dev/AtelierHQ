@@ -96,90 +96,115 @@ export const SKIRT = {
 
 // ── Bodice block ──────────────────────────────────────────────────────────────
 
+/** 1 inch in centimetres — every constant below is transcribed from
+ *  PatternLab in inches (its native unit) and converted once, here. */
+const IN = 2.54;
+
 /**
- * Bodice drafting constants, following the point-by-point block method.
- *
- * This is a close-fitting block (sloper): the foundation other styles are
- * drafted from, so ease is minimal and deliberately distributed.
+ * Bodice drafting constants — the "Lety Antony" (front) / Helen
+ * Joseph-Armstrong-derived (back) construction method, ported term-for-term
+ * from PatternLab's `src/components/patterns/FrontBodiceDashboard.tsx`
+ * (itself a port of the ExtendScript sources `NewFront-bodice.jsx` /
+ * `NewBack_bodice.jsx`). Every value below is commented with the exact
+ * PatternLab constant/expression it came from.
  */
 export const BODICE = {
-  /**
-   * Total bust ease for a close-fitting block (cm). A quarter is added to each
-   * quarter-panel at the side seam.
-   */
-  easeBust: 5,
-  /** Total waist ease (cm), distributed the same way. */
-  easeWaist: 2.5,
+  /** `acrossChestEase = 0.25 * PT` (frontCurveHandles / point I). */
+  acrossChestEase: 0.25 * IN,
 
-  /** Armhole (scye) depth = bust ÷ divisor + offset. Tune the offset 4–6 cm. */
-  armholeDepthDivisor: 4,
-  armholeDepthOffset: 5,
+  /** Armhole-ease tiers, `if (m.bust >= 50/40) ...` — thresholds converted
+   *  from the source's raw inch bust circumference to cm, like everything
+   *  else here, so the calculator can work in cm throughout. */
+  armholeEaseTiers: [
+    { minBust: 50 * IN, ease: 2.5 * IN },
+    { minBust: 40 * IN, ease: 2.0 * IN },
+  ],
+  armholeEaseDefault: 1.5 * IN,
+  /** `armholeDepth = (bust / 6 + armholeEase) * PT`. */
+  armholeDepthDivisor: 6,
 
-  /** Across-back estimate when not measured: bust ÷ divisor + offset. */
-  backWidthDivisor: 6,
-  backWidthOffset: 5.5,
+  /** `neckWidth = shoulderWidth/2 - shortSide(shoulderSeamLength, shoulderDrop)`,
+   *  falling back to this when the triangle is invalid. */
+  neckWidthFallback: 2.75 * IN,
 
-  /** Back neck width = neck ÷ divisor + offset; drop is a third of the width. */
-  backNeckWidthDivisor: 5,
-  backNeckWidthOffset: 0.5,
-  backNeckDropRatio: 1 / 3,
+  /** Dart placement on the waistline: `bustSpan/2 - 0.5` (both blocks). */
+  dartPlacementOffset: 0.5 * IN,
+  /** Front dart's first leg (J1) drop below J: `0.125 * PT`. */
+  frontDartLegDrop: 0.125 * IN,
 
-  /** Front neck width = neck ÷ divisor; front drops lower than the back. */
-  frontNeckWidthDivisor: 5,
-  frontNeckDropOffset: 1,
+  /** Front side-extension tiers from `deltaL = frontBodiceLength - backBodiceLength`. */
+  sideExtensionTiers: [
+    { minDeltaL: 3.0 * IN, extension: 1.5 * IN },
+    { minDeltaL: 1.0 * IN, extension: 1.25 * IN },
+  ],
+  sideExtensionDefault: 0,
 
-  /** Vertical drop from neck point to shoulder point, for average slope. */
-  shoulderSlopeDrop: 4.5,
+  /** Back shoulder dart: `E1 = pointAtAngle(E, angleFE, 0.5*PT)`,
+   *  `P1/P2 = pointAtAngle(P, angleFE, ∓0.25*PT)`. */
+  backShoulderDartOffset: 0.5 * IN,
+  backShoulderDartHalfWidth: 0.25 * IN,
+  /** `qDistance = sideSeamLength/3 + 1.0*PT`. */
+  backShoulderDartQOffset: 1.0 * IN,
 
-  /** Back shoulder dart for shoulder-blade shaping. */
-  backShoulderDartIntake: 1.2,
-  /** Position along the shoulder line, from the neck point. */
-  backShoulderDartPositionRatio: 1 / 3,
-  backShoulderDartLength: 8,
+  /** Swayback contour: `B1 = {x: B.x + 0.75*PT, y: B.y}`. */
+  swaybackOffset: 0.75 * IN,
 
-  /** Of the total waist suppression, the side seam takes this much (cm). */
-  sideSeamWaistIntake: 1.5,
-  /** Waist dart apex stops this far short of bust / shoulder-blade level. */
-  waistDartApexClearance: 5,
-  waistDartPositionRatio: { front: 0.5, back: 0.5 },
+  /** Back waist dart width, both branches: `H = G ± 1.0*PT`. */
+  backWaistDartWidth: 1.0 * IN,
+  /** Back waist-side offset when swayback is on: `waist/4 + 1.0*PT`. */
+  backWaistSideSwaybackOffset: 1.0 * IN,
 
-  /** Bust point estimates, used when not measured. */
-  bustPointSepFromBustRatio: 0.2,
-  shoulderToBustFromBustRatio: 0.28,
+  /** Across-back half width: provided branch adds this ease; fallback
+   *  branch (`shoulderWidth/2 - 0.25*PT`) subtracts it. */
+  acrossBackEase: 0.25 * IN,
 
-  /**
-   * Bust dart intake as a share of the bust-to-waist differential. A larger
-   * differential implies a fuller cup and so a larger dart.
-   */
-  bustDartIntakeFromDifferentialRatio: 0.42,
-  bustDartIntakeRange: { min: 4, max: 14 },
-
-  /** Armhole curve control-point offsets, as fractions of the curve's box. */
-  armholeCurve: {
-    /** Back-width point pulled slightly inward. */
-    upperInsetFraction: 0.12,
-    upperHeightFraction: 0.42,
-    /** Underarm approach pulled slightly outward. */
-    lowerOutsetFraction: 0.46,
+  /** Curve-handle fractions — front (`frontCurveHandles`) and back
+   *  (`backCurveHandles`), each a fraction of the distance/width named. */
+  curve: {
+    frontNeckRightFraction: 0.45, // cRight: neckWidthPx * 0.45
+    frontNeckLeftFraction: 0.35, // fLeft: neckDepth * 0.35
+    frontArmholeUpperFraction: 0.3, // gRight, iLeft: distGI * 0.3
+    frontArmholeLowerFraction: 0.35, // iRight: distIK * 0.35
+    frontUnderarmFraction: 0.35, // kLeft: armscyeWidth * 0.35
+    backNeckFraction: 0.4, // cRight: (F.x - C.x) * 0.4
+    backArmholeUpperFraction: 0.3, // rLeft, e1Right: distER * 0.3
+    backArmholeLowerFraction: 0.35, // rRight, oLeft: distRO / widthRO * 0.35
   },
 
   grainlinePositionRatio: 0.5,
   grainlineInsetRatio: 0.2,
-} as const;
 
-/**
- * Cubic Bézier control-point placement for the armhole scoop, expressed as
- * fractions of the box between the shoulder tip and the underarm.
- *
- * The curve leaves the shoulder tip almost vertically (small x offset, large y),
- * hollows inward, then arrives flat at the underarm. Because every fraction is
- * ≤ 1, the control points can never fall outside that box, so the armhole
- * cannot bulge past the side seam.
- */
-export const ARMHOLE_CURVE = {
-  cp1xFraction: 0.08,
-  cp1yFraction: 0.44,
-  cp2xFraction: 0.46,
+  // ── Estimation fallbacks for the new method's measurements, used only when
+  // a tailor has not taken them. Not part of PatternLab itself (its dashboard
+  // just ships static per-field defaults) — these ratios are derived from
+  // PatternLab's own sample measurement set (bust 42in) so an estimated
+  // draft for a similarly-proportioned body lands close to that reference,
+  // following ERP's existing convention of estimating from a proportion
+  // rather than a fixed constant (see bodice-calculator.ts's `resolve()`).
+  /** `shoulderDrop` ≈ 0.75in for a 15in `shoulderWidth` sample. */
+  shoulderDropFromShoulderRatio: 0.75 / 15,
+  /** `bustDepth` ≈ 10.5in for a 42in `bust` sample. */
+  bustDepthFromBustRatio: 10.5 / 42,
+  /** Carried over from the previous bodice method — `bustSpan`
+   *  (PatternLab's own name for `bustPointSep`) has no equivalent in either
+   *  ExtendScript source's own defaults, so this ratio (unchanged from the
+   *  engine's prior bodice calculator) is still the fallback when neither
+   *  `bustPointSep` nor a size chart supplies it. */
+  bustPointSepFromBustRatio: 0.2,
+  /** Source's own comment on `centerBackLength`: "should be
+   *  backBodiceLength - 0.5" — used verbatim as the fallback. */
+  centerBackLengthOffset: 0.5 * IN,
+  /** No equivalent front comment in the source; offset implied by its
+   *  sample defaults (frontBodiceLength 18in, centerFrontLength 14.5in). */
+  centerFrontLengthOffset: 3.5 * IN,
+  /** `acrossChestWidth` ≈ 13.5in for a 42in `bust` sample. */
+  acrossChestWidthFromBustRatio: 13.5 / 42,
+  /** `sideSeamLength` ≈ 6.5in for a 15in `backBodiceLength` sample. Computed
+   *  from the back panel's length regardless of which panel is drafting, so
+   *  an estimated side seam still matches between front and back — the same
+   *  "match by construction" guarantee the source gets for free from sharing
+   *  one form. */
+  sideSeamLengthFromBackBodiceLengthRatio: 6.5 / 15,
 } as const;
 
 // ── Dress block ───────────────────────────────────────────────────────────────

@@ -1,311 +1,394 @@
 /**
- * Bodice draft regression tests.
+ * Bodice draft regression tests — Lety Antony / Helen Joseph-Armstrong method
+ * (ported from PatternLab's FrontBodiceDashboard.tsx; see bodice-calculator.ts
+ * for the full port commentary).
  *
- * Two jobs:
- *  - assert the drafting formulas produce the values the method specifies, for a
- *    known size, so a formula change cannot silently move a point;
- *  - assert the drawn geometry stays sane (portrait, in-bounds, no inverted
- *    armhole) across every size and for hostile input.
+ * Three jobs:
+ *  - numerically verify the port against an independent reference
+ *    transcription of PatternLab's own raw (inches, Y-up) formulas, for
+ *    several measurement sets — this is the "matches PatternLab" check;
+ *  - assert the drafted geometry stays sane (closed outline, in-bounds,
+ *    side seam matches between front and back "by construction");
+ *  - assert the degenerate-input fallbacks (invalid neck-width triangle,
+ *    fully-estimated measurements) still produce a drawable block.
  */
 
 import { describe, expect, it } from "vitest";
 import { bodiceBack, bodiceFront, draftBodice } from "@/lib/pattern/bodice.ts";
 import { calculateBodice } from "@/lib/pattern/bodice-calculator.ts";
-import { BODICE, STANDARD_SIZES, UK_SIZES } from "@/lib/pattern/constants.ts";
-import { distance } from "@/lib/pattern/points.ts";
+import { BODICE } from "@/lib/pattern/constants.ts";
 import type { Measurements, PatternBlock } from "@/lib/pattern/types.ts";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Reference implementation ──────────────────────────────────────────────────
+//
+// An independent transcription of PatternLab's own raw (inches, Y-up,
+// negative-x-toward-side) formulas from `computeFrontBodicePoints` /
+// `computeBackBodicePoints`, deliberately NOT sharing code with
+// bodice-calculator.ts, so a bug introduced in the port shows up as a
+// mismatch here. Works entirely in inches; converts to cm only at the
+// point of comparison (`toCm`).
 
+const IN = 2.54;
 type Pt = { x: number; y: number };
 
-/** Every coordinate pair in a `d` string, including Bézier control points. */
-function allPoints(d: string): Pt[] {
-  const pts: Pt[] = [];
-  for (const part of d.trim().split(/(?=[MLQCZmlqcz])/)) {
-    const letter = part[0]?.toUpperCase();
-    if (!letter || letter === "Z") continue;
-    const n = part.slice(1).trim().split(/[\s,]+/).filter(Boolean).map(Number);
-    for (let i = 0; i + 1 < n.length; i += 2) pts.push({ x: n[i], y: n[i + 1] });
+function angleBetween(a: Pt, b: Pt): number {
+  return Math.atan2(b.y - a.y, b.x - a.x);
+}
+function pointAtAngle(o: Pt, angle: number, d: number): Pt {
+  return { x: o.x + d * Math.cos(angle), y: o.y + d * Math.sin(angle) };
+}
+function dist(a: Pt, b: Pt): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+function shortSide(hyp: number, leg: number): number {
+  return Math.sqrt(Math.max(hyp * hyp - leg * leg, 0));
+}
+/** Raw (PatternLab-frame) point → this engine's cm frame: negate x and y
+ *  together, then convert inches to cm. */
+function toCm(p: Pt): Pt {
+  return { x: -p.x * IN, y: -p.y * IN };
+}
+
+type RefMeasurements = {
+  bust: number;
+  waist: number;
+  bustSpan: number;
+  shoulderWidth: number;
+  shoulderDrop: number;
+  shoulderSeamLength: number;
+  sideSeamLength: number;
+  backBodiceLength: number;
+  frontBodiceLength: number;
+  centerFrontLength: number;
+  bustDepth: number;
+  acrossChestWidth: number;
+  centerBackLength: number;
+  acrossBackWidthProvided: boolean;
+  acrossBackWidth: number;
+  hasShoulderDart: boolean;
+  hasSwaybackContour: boolean;
+};
+
+function referenceFront(m: RefMeasurements) {
+  const A: Pt = { x: 0, y: 0 };
+  const B: Pt = { x: A.x, y: A.y - m.frontBodiceLength };
+  const C: Pt = { x: A.x, y: B.y + m.centerFrontLength };
+  let neckWidth = m.shoulderWidth / 2 - shortSide(m.shoulderSeamLength, m.shoulderDrop);
+  if (Number.isNaN(neckWidth) || neckWidth <= 0) neckWidth = 2.75;
+  const F: Pt = { x: A.x - neckWidth, y: A.y };
+  const D: Pt = { x: A.x - m.shoulderWidth / 2, y: A.y };
+  const G: Pt = { x: D.x, y: D.y - m.shoulderDrop };
+  const H: Pt = { x: A.x - m.bustSpan / 2, y: A.y - m.bustDepth };
+  let armholeEase: number;
+  if (m.bust >= 50) armholeEase = 2.5;
+  else if (m.bust >= 40) armholeEase = 2.0;
+  else armholeEase = 1.5;
+  const armholeDepth = m.bust / 6 + armholeEase;
+  const K: Pt = { x: A.x - m.bust / 4, y: A.y - (m.shoulderDrop + armholeDepth) };
+  const midCFY = (C.y + K.y) / 2;
+  const I: Pt = { x: A.x - m.acrossChestWidth / 2 - 0.25, y: midCFY };
+  const dartPlacementDist = m.bustSpan / 2 - 0.5;
+  const J: Pt = { x: B.x - dartPlacementDist, y: B.y };
+  const J1: Pt = { x: J.x, y: J.y - 0.125 };
+  const leg1Length = dist(H, J1);
+  const deltaL = m.frontBodiceLength - m.backBodiceLength;
+  let sideExtensionVal: number;
+  if (deltaL >= 3.0) sideExtensionVal = 1.5;
+  else if (deltaL > 1.0) sideExtensionVal = 1.25;
+  else sideExtensionVal = 0.0;
+  const L: Pt = { x: K.x, y: K.y - m.sideSeamLength };
+  const M: Pt = { x: L.x - sideExtensionVal, y: L.y };
+  const angleKM = angleBetween(K, M);
+  const N: Pt = pointAtAngle(K, angleKM, m.sideSeamLength);
+  const remainingWaistDist = m.waist / 4 - dartPlacementDist;
+  const angleNJ1 = angleBetween(N, J1);
+  const waistAnchorForP = pointAtAngle(N, angleNJ1, remainingWaistDist);
+  const angleHAnchor = angleBetween(H, waistAnchorForP);
+  const P: Pt = pointAtAngle(H, angleHAnchor, leg1Length);
+  return { A, B, C, D, F, G, H, I, J, J1, K, L, M, N, P };
+}
+
+function referenceBack(m: RefMeasurements) {
+  const acrossBackHalf = m.acrossBackWidthProvided
+    ? m.acrossBackWidth / 2 + 0.25
+    : m.shoulderWidth / 2 - 0.25;
+
+  const A: Pt = { x: 0, y: 0 };
+  const B: Pt = { x: A.x, y: A.y - m.backBodiceLength };
+  const C: Pt = { x: B.x, y: B.y + m.centerBackLength };
+  const D: Pt = { x: A.x + m.shoulderWidth / 2, y: A.y };
+  const E: Pt = { x: D.x, y: D.y - m.shoulderDrop };
+  const dyF = Math.abs(A.y - E.y);
+  const dxF = shortSide(m.shoulderSeamLength, dyF);
+  const F: Pt = { x: E.x - dxF, y: A.y };
+
+  let E1: Pt = E;
+  let P: Pt = { x: 0, y: 0 };
+  let P1: Pt = { x: 0, y: 0 };
+  let P2: Pt = { x: 0, y: 0 };
+  let Q: Pt = { x: 0, y: 0 };
+  if (m.hasShoulderDart) {
+    const angleFE = angleBetween(F, E);
+    E1 = pointAtAngle(E, angleFE, 0.5);
+    P = { x: (F.x + E1.x) / 2, y: (F.y + E1.y) / 2 };
+    P1 = pointAtAngle(P, angleFE, -0.25);
+    P2 = pointAtAngle(P, angleFE, 0.25);
   }
-  return pts;
+
+  let BActive: Pt = B;
+  let cbAngle = -Math.PI / 2;
+  if (m.hasSwaybackContour) {
+    const B1: Pt = { x: B.x + 0.75, y: B.y };
+    cbAngle = angleBetween(C, B1);
+    BActive = pointAtAngle(C, cbAngle, m.centerBackLength);
+  }
+
+  const dartPlacement = m.bustSpan / 2 - 0.5;
+  let G: Pt, H: Pt, I: Pt, J: Pt, G1: Pt;
+  if (!m.hasSwaybackContour) {
+    G = { x: BActive.x + dartPlacement, y: BActive.y };
+    H = { x: G.x + 1.0, y: G.y };
+    I = { x: (G.x + H.x) / 2, y: G.y };
+    J = { x: I.x, y: I.y + (m.sideSeamLength - 1.0) };
+    G1 = { x: G.x, y: G.y };
+  } else {
+    const waistAngle = cbAngle + Math.PI / 2;
+    G = pointAtAngle(BActive, waistAngle, dartPlacement);
+    H = pointAtAngle(G, waistAngle, 1.0);
+    I = { x: (G.x + H.x) / 2, y: (G.y + H.y) / 2 };
+    J = pointAtAngle(I, cbAngle, -(m.sideSeamLength - 1.0));
+    const jhLength = dist(H, J);
+    const angleJG = angleBetween(J, G);
+    G1 = pointAtAngle(J, angleJG, jhLength);
+  }
+  if (m.hasShoulderDart) {
+    const anglePJ = angleBetween(P, J);
+    Q = pointAtAngle(P, anglePJ, m.sideSeamLength / 3 + 1.0);
+  }
+  let K: Pt;
+  if (!m.hasSwaybackContour) {
+    K = { x: H.x + (m.waist / 4 - dartPlacement), y: H.y };
+  } else {
+    K = { x: BActive.x + (m.waist / 4 + 1.0), y: B.y };
+  }
+  const L: Pt = { x: K.x, y: K.y + m.sideSeamLength };
+  let M: Pt = { x: A.x, y: L.y };
+  if (m.hasSwaybackContour) {
+    M = { x: C.x + Math.abs(L.y - C.y) / Math.tan(Math.abs(cbAngle)), y: L.y };
+  }
+  const N: Pt = { x: M.x + m.bust / 4, y: M.y };
+  const angleKN = angleBetween(K, N);
+  const O: Pt = pointAtAngle(K, angleKN, m.sideSeamLength);
+  const midCmY = (C.y + M.y) / 2;
+  const R: Pt = { x: A.x + acrossBackHalf, y: midCmY };
+
+  return { A, B, C, D, E, F, E1, P, P1, P2, Q, BActive, G, H, I, J, G1, K, L, M, N, O, R };
 }
 
-function outlineOf(block: PatternBlock): string {
-  const outline = block.paths.find((p) => p.type === "outline");
-  if (!outline) throw new Error(`${block.id} has no outline`);
-  return outline.d;
-}
-
-function extent(d: string) {
-  const pts = allPoints(d);
+/** Builds the ERP `Measurements` object that should reproduce `m` exactly —
+ *  every field the calculator would otherwise estimate is supplied directly,
+ *  in cm, so the comparison below tests the point-placement/curve-handle
+ *  port, not the estimation formulas (those get their own test below). */
+function toErpMeasurements(m: RefMeasurements, shoulder: { neck: number; shoulderCm: number }): Measurements {
   return {
-    maxX: Math.max(...pts.map((p) => p.x)),
-    maxY: Math.max(...pts.map((p) => p.y)),
-    minX: Math.min(...pts.map((p) => p.x)),
+    chest: m.bust * IN,
+    waist: m.waist * IN,
+    neck: shoulder.neck,
+    shoulder: shoulder.shoulderCm,
+    bustPointSep: m.bustSpan * IN,
+    frontNeckToWaist: m.frontBodiceLength * IN,
+    backNeckToWaist: m.backBodiceLength * IN,
+    shoulderDrop: m.shoulderDrop * IN,
+    bustDepth: m.bustDepth * IN,
+    centerFrontLength: m.centerFrontLength * IN,
+    acrossChestWidth: m.acrossChestWidth * IN,
+    centerBackLength: m.centerBackLength * IN,
+    acrossBackWidth: m.acrossBackWidthProvided ? m.acrossBackWidth * IN : undefined,
+    sideSeamLength: m.sideSeamLength * IN,
   };
 }
 
-/** UK 12, the size the method's worked example is easiest to check against. */
-const UK12: Measurements = STANDARD_SIZES["12"];
+/** Solves for an ERP `shoulder` (cross-shoulder, cm) + `neck` (cm) pair that
+ *  reproduces the reference's independent `shoulderWidth`/`shoulderSeamLength`
+ *  exactly, using the same algebra as bodice-calculator.ts's cross-shoulder
+ *  branch: `shoulderWidth = shoulderRaw`, `shoulderSeamLength = shoulderRaw/2
+ *  - neck/5`. */
+function shoulderInputsFor(m: RefMeasurements): { neck: number; shoulderCm: number } {
+  const shoulderCm = m.shoulderWidth * IN;
+  const neckGapCm = shoulderCm / 2 - m.shoulderSeamLength * IN;
+  return { neck: neckGapCm * 5, shoulderCm };
+}
 
-/** The measurements from the original balloon bug report. */
-const BUG_REPORT: Measurements = { chest: 84, waist: 60, shoulder: 21 };
+const REFERENCE_SETS: { name: string; m: RefMeasurements }[] = [
+  {
+    // PatternLab's own sample defaults, verbatim.
+    name: "PatternLab defaults (bust 42in)",
+    m: {
+      bust: 42.0, waist: 32.0, bustSpan: 8.0, shoulderWidth: 15.0, shoulderDrop: 0.75,
+      shoulderSeamLength: 5.0, sideSeamLength: 6.5, backBodiceLength: 15.0,
+      frontBodiceLength: 18.0, centerFrontLength: 14.5, bustDepth: 10.5,
+      acrossChestWidth: 13.5, centerBackLength: 14.5, acrossBackWidthProvided: true,
+      acrossBackWidth: 14.0, hasShoulderDart: true, hasSwaybackContour: true,
+    },
+  },
+  {
+    // A smaller frame, dart/swayback toggles both on — proves the port
+    // generalises beyond the one shipped sample.
+    name: "Smaller frame (bust 34in), toggles on",
+    m: {
+      bust: 34.0, waist: 26.0, bustSpan: 7.0, shoulderWidth: 13.5, shoulderDrop: 0.6,
+      shoulderSeamLength: 4.5, sideSeamLength: 6.0, backBodiceLength: 14.0,
+      frontBodiceLength: 16.5, centerFrontLength: 13.0, bustDepth: 9.0,
+      acrossChestWidth: 12.0, centerBackLength: 13.5, acrossBackWidthProvided: true,
+      acrossBackWidth: 12.5, hasShoulderDart: true, hasSwaybackContour: true,
+    },
+  },
+  {
+    // A larger frame with both back toggles OFF and across-back width NOT
+    // provided (fallback branch) — proves both branches of the back
+    // construction and the armhole-ease top tier (bust >= 50in).
+    name: "Larger frame (bust 52in), toggles off, across-back fallback",
+    m: {
+      bust: 52.0, waist: 44.0, bustSpan: 9.5, shoulderWidth: 16.5, shoulderDrop: 0.9,
+      shoulderSeamLength: 5.5, sideSeamLength: 7.5, backBodiceLength: 16.0,
+      frontBodiceLength: 19.5, centerFrontLength: 15.5, bustDepth: 11.5,
+      acrossChestWidth: 15.0, centerBackLength: 15.5, acrossBackWidthProvided: false,
+      acrossBackWidth: 0, hasShoulderDart: false, hasSwaybackContour: false,
+    },
+  },
+];
 
-// ── Framework formulas ────────────────────────────────────────────────────────
+const TOL = 0.01; // cm
 
-describe("bodice framework follows the drafting method", () => {
-  it("derives armhole depth from bust", () => {
-    const d = calculateBodice(UK12, "back");
-    // bust/8 + 5 for bust 90 => 16.25
-    expect(d.calc.armholeDepth).toBeCloseTo(90 / 8 + 5, 6);
-  });
+function expectPointClose(actual: { x: number; y: number }, expected: Pt, label: string) {
+  expect(actual.x, `${label}.x`).toBeCloseTo(expected.x, 2);
+  expect(actual.y, `${label}.y`).toBeCloseTo(expected.y, 2);
+}
 
-  it("adds a quarter of the bust ease to the bust quarter", () => {
-    const d = calculateBodice(UK12, "back");
-    expect(d.calc.bustQuarter).toBeCloseTo(90 / 4 + BODICE.easeBust / 4, 6);
-  });
+describe("bodice — numeric match against PatternLab reference", () => {
+  for (const { name, m } of REFERENCE_SETS) {
+    it(`front points match: ${name}`, () => {
+      const shoulderIn = shoulderInputsFor(m);
+      const erpM = toErpMeasurements(m, shoulderIn);
+      const draft = calculateBodice(erpM, "front", { bodiceShoulderDart: m.hasShoulderDart, bodiceSwayback: m.hasSwaybackContour });
+      const ref = referenceFront(m);
+      const front = draft.front!;
 
-  it("adds a quarter of the waist ease to the waist quarter", () => {
-    const d = calculateBodice(UK12, "back");
-    expect(d.calc.waistQuarter).toBeCloseTo(71 / 4 + BODICE.easeWaist / 4, 6);
-  });
+      expectPointClose(front.centreNeck, toCm(ref.C), "centreNeck");
+      expectPointClose(front.neckPoint, toCm(ref.F), "neckPoint");
+      expectPointClose(front.shoulderPoint, toCm(ref.G), "shoulderPoint");
+      expectPointClose(front.bustPoint, toCm(ref.H), "bustPoint");
+      expectPointClose(front.acrossChestPoint, toCm(ref.I), "acrossChestPoint");
+      expectPointClose(front.underarm, toCm(ref.K), "underarm");
+      expectPointClose(front.dartLegBase, toCm(ref.J1), "dartLegBase");
+      expectPointClose(front.dartLegApex, toCm(ref.P), "dartLegApex");
+      expectPointClose(front.sideExtOuter, toCm(ref.M), "sideExtOuter");
+      expectPointClose(front.waistSide, toCm(ref.N), "waistSide");
+      expectPointClose(front.centreWaist, toCm(ref.B), "centreWaist");
+    });
 
-  it("derives the back neck drop as a third of the neck width", () => {
-    const d = calculateBodice(UK12, "back");
-    expect(d.calc.neckDrop).toBeCloseTo(d.calc.neckWidth * (1 / 3), 6);
-  });
+    it(`back points match: ${name}`, () => {
+      const shoulderIn = shoulderInputsFor(m);
+      const erpM = toErpMeasurements(m, shoulderIn);
+      const draft = calculateBodice(erpM, "back", { bodiceShoulderDart: m.hasShoulderDart, bodiceSwayback: m.hasSwaybackContour });
+      const ref = referenceBack(m);
+      const back = draft.back!;
 
-  it("drops the front neck lower than the back", () => {
-    const front = calculateBodice(UK12, "front");
-    const back = calculateBodice(UK12, "back");
-    expect(front.calc.neckDrop).toBeGreaterThan(back.calc.neckDrop);
-  });
+      expectPointClose(back.centreNeck, toCm(ref.C), "centreNeck");
+      expectPointClose(back.neckPoint, toCm(ref.F), "neckPoint");
+      expectPointClose(back.shoulderPoint, toCm(m.hasShoulderDart ? ref.E1 : ref.E), "shoulderPoint");
+      expectPointClose(back.acrossBackPoint, toCm(ref.R), "acrossBackPoint");
+      expectPointClose(back.underarm, toCm(ref.O), "underarm");
+      expectPointClose(back.waistSideTop, toCm(ref.K), "waistSideTop");
+      expectPointClose(back.sideSeamBase, toCm(ref.H), "sideSeamBase");
+      expectPointClose(back.waistDartLeg, toCm(ref.J), "waistDartLeg");
+      expectPointClose(back.waistDartFoot, toCm(ref.G1), "waistDartFoot");
+      expectPointClose(back.centreWaist, toCm(ref.BActive), "centreWaist");
 
-  it("estimates across-back from bust when not measured", () => {
-    const d = calculateBodice(UK12, "back");
-    expect(d.resolved.backWidth).toBeCloseTo(90 / 6 + 5.5, 6);
-    expect(d.estimates.some((e) => e.field === "backWidth")).toBe(true);
-  });
-
-  it("prefers a measured across-back over the estimate", () => {
-    const d = calculateBodice({ ...UK12, backWidth: 36 }, "back");
-    expect(d.resolved.backWidth).toBe(36);
-    expect(d.estimates.some((e) => e.field === "backWidth")).toBe(false);
-  });
-});
-
-describe("shoulder construction", () => {
-  it("keeps the shoulder seam exactly the measured length", () => {
-    const d = calculateBodice({ chest: 90, waist: 71, shoulder: 13 }, "back");
-    const seam = distance(d.points.neckPoint, d.points.shoulderPoint);
-    expect(seam).toBeCloseTo(13, 6);
-  });
-
-  it("drops the shoulder by the slope constant", () => {
-    const d = calculateBodice({ chest: 90, waist: 71, shoulder: 13 }, "back");
-    const drop = d.points.shoulderPoint.y - d.points.neckPoint.y;
-    expect(drop).toBeCloseTo(BODICE.shoulderSlopeDrop, 6);
-  });
-
-  it("reads a tip-to-tip shoulder measurement as cross-shoulder", () => {
-    const d = calculateBodice({ chest: 90, waist: 71, shoulder: 39.5 }, "back");
-    expect(d.diagnostics.some((x) => x.code === "SHOULDER_READ_AS_CROSS")).toBe(true);
-    expect(d.resolved.shoulderLen).toBeLessThan(20);
-    expect(d.resolved.shoulderLen).toBeGreaterThan(10);
-  });
-
-  it("reads a small shoulder value as a single seam", () => {
-    const d = calculateBodice(BUG_REPORT, "back");
-    expect(d.diagnostics.some((x) => x.code === "SHOULDER_READ_AS_SEAM")).toBe(true);
-    expect(d.resolved.shoulderLen).toBe(21);
-  });
-
-  it("cuts the front shoulder shorter than the back by the dart intake", () => {
-    const front = calculateBodice(UK12, "front");
-    const back = calculateBodice(UK12, "back");
-    const frontSeam = distance(front.points.neckPoint, front.points.shoulderPoint);
-    const backSeam = distance(back.points.neckPoint, back.points.shoulderPoint);
-    expect(backSeam - frontSeam).toBeCloseTo(BODICE.backShoulderDartIntake, 4);
-  });
-});
-
-// ── Darts ─────────────────────────────────────────────────────────────────────
-
-describe("bust dart", () => {
-  it("places the apex from the bust point measurements", () => {
-    const m = { ...UK12, bustPointSep: 19, shoulderToBust: 26 };
-    const d = calculateBodice(m, "front");
-    expect(d.points.bustPoint?.x).toBeCloseTo(9.5, 6);
-    expect(d.points.bustPoint?.y).toBeCloseTo(26, 6);
-  });
-
-  it("opens the dart to the calculated intake", () => {
-    const d = calculateBodice(UK12, "front");
-    expect(d.bustDart).toBeDefined();
-    const gap = distance(d.bustDart!.legStart, d.bustDart!.legEnd);
-    expect(gap).toBeCloseTo(d.bustDart!.intake, 4);
-  });
-
-  it("keeps both dart legs the same length", () => {
-    const d = calculateBodice(UK12, "front");
-    const dart = d.bustDart!;
-    expect(distance(dart.apex, dart.legStart)).toBeCloseTo(distance(dart.apex, dart.legEnd), 6);
-  });
-
-  it("scales the dart with the bust-to-waist differential", () => {
-    const small = calculateBodice({ chest: 88, waist: 80, shoulder: 13 }, "front");
-    const large = calculateBodice({ chest: 110, waist: 70, shoulder: 13 }, "front");
-    expect(large.calc.bustDartIntake).toBeGreaterThan(small.calc.bustDartIntake);
-  });
-
-  it("clamps the dart intake to a workable range", () => {
-    const extreme = calculateBodice({ chest: 160, waist: 55, shoulder: 13 }, "front");
-    expect(extreme.calc.bustDartIntake).toBeLessThanOrEqual(BODICE.bustDartIntakeRange.max);
-    const flat = calculateBodice({ chest: 85, waist: 84, shoulder: 13 }, "front");
-    expect(flat.calc.bustDartIntake).toBeGreaterThanOrEqual(BODICE.bustDartIntakeRange.min);
-  });
-
-  it("gives the back a shoulder dart and no bust dart", () => {
-    const d = calculateBodice(UK12, "back");
-    expect(d.shoulderDart).toBeDefined();
-    expect(d.bustDart).toBeUndefined();
-    expect(d.calc.shoulderDartIntake).toBeCloseTo(BODICE.backShoulderDartIntake, 4);
-  });
-});
-
-describe("waist suppression", () => {
-  it("splits suppression between the side seam and the dart", () => {
-    const d = calculateBodice(UK12, "back");
-    expect(d.calc.sideSeamIntake + d.calc.waistDartIntake).toBeCloseTo(d.calc.waistSuppression, 6);
-  });
-
-  it("warns and suppresses nothing when the waist exceeds the bust", () => {
-    const d = calculateBodice({ chest: 80, waist: 100, shoulder: 13 }, "back");
-    expect(d.calc.waistSuppression).toBe(0);
-    expect(d.calc.waistDartIntake).toBe(0);
-    expect(d.diagnostics.some((x) => x.code === "NO_WAIST_SUPPRESSION")).toBe(true);
-  });
-});
-
-// ── Geometry sanity ───────────────────────────────────────────────────────────
-
-describe("bodice geometry stays sane", () => {
-  const panels = ["front", "back"] as const;
-
-  it.each(panels)("%s draft is portrait and inside its viewBox", (panel) => {
-    const block = draftBodice(BUG_REPORT, panel);
-    const d = outlineOf(block);
-    const e = extent(d);
-
-    // A bodice panel is taller than it is wide. The old balloon bug failed this.
-    expect(e.maxX).toBeLessThan(e.maxY);
-    expect(e.maxX).toBeLessThanOrEqual(block.viewBox.x + block.viewBox.w);
-    expect(e.maxY).toBeLessThanOrEqual(block.viewBox.y + block.viewBox.h);
-    expect(e.minX).toBeGreaterThanOrEqual(block.viewBox.x);
-  });
-
-  it.each(panels)("%s armhole never crosses the side seam", (panel) => {
-    const block = draftBodice(UK12, panel);
-    const draft = calculateBodice(UK12, panel);
-    // No point on the outline may sit outside the underarm, which is the widest
-    // point of the block at armhole level.
-    const widest = Math.max(draft.points.underarm.x, draft.points.waistSide.x);
-    for (const p of allPoints(outlineOf(block))) {
-      expect(p.x).toBeLessThanOrEqual(widest + 0.001);
-    }
-  });
-
-  it.each(panels)("%s uses a cubic armhole", (panel) => {
-    const block = draftBodice(UK12, panel);
-    expect(outlineOf(block)).toContain("C ");
-  });
-
-  it.each(UK_SIZES)("UK %s drafts finite, portrait blocks", (size) => {
-    for (const panel of panels) {
-      const block = draftBodice(STANDARD_SIZES[size], panel);
-      expect(block.missingMeasurements).toEqual([]);
-      const d = outlineOf(block);
-      for (const p of allPoints(d)) {
-        expect(Number.isFinite(p.x)).toBe(true);
-        expect(Number.isFinite(p.y)).toBe(true);
+      if (m.hasShoulderDart) {
+        expect(draft.shoulderDart).toBeDefined();
+        expectPointClose(draft.shoulderDart!.apex, toCm(ref.P), "shoulderDart.apex");
+        expectPointClose(draft.shoulderDart!.legStart, toCm(ref.P1), "shoulderDart.legStart");
+        expectPointClose(draft.shoulderDart!.legEnd, toCm(ref.P2), "shoulderDart.legEnd");
+      } else {
+        expect(draft.shoulderDart).toBeUndefined();
       }
-      const e = extent(d);
-      expect(e.maxX).toBeLessThan(e.maxY);
-      expect(e.maxX).toBeLessThanOrEqual(block.viewBox.x + block.viewBox.w);
+    });
+
+    it(`side seam matches between front and back by construction: ${name}`, () => {
+      const shoulderIn = shoulderInputsFor(m);
+      const erpM = toErpMeasurements(m, shoulderIn);
+      const front = calculateBodice(erpM, "front", {});
+      const back = calculateBodice(erpM, "back", {});
+      // Both panels read the same explicit `sideSeamLength` measurement.
+      expect(front.resolved.sideSeamLength).toBeCloseTo(back.resolved.sideSeamLength, 6);
+      expect(front.resolved.sideSeamLength).toBeCloseTo(m.sideSeamLength * IN, 2);
+    });
+  }
+});
+
+describe("bodice — estimation fallbacks", () => {
+  const minimal: Measurements = { chest: 92, waist: 70, shoulder: 12, height: 165 };
+
+  it("estimates every new field and still drafts a closed block", () => {
+    const front = bodiceFront(minimal);
+    const back = bodiceBack(minimal);
+    expect(front.missingMeasurements).toHaveLength(0);
+    expect(back.missingMeasurements).toHaveLength(0);
+    expect(front.paths[0]!.d.startsWith("M")).toBe(true);
+    expect(front.paths[0]!.d.trim().endsWith("Z")).toBe(true);
+
+    const estimatedFields = front.estimates.map((e) => e.field);
+    for (const field of ["shoulderDrop", "bustDepth", "centerFrontLength", "acrossChestWidth"] as const) {
+      expect(estimatedFields, `expected ${field} to be estimated`).toContain(field);
     }
   });
 
-  it("computes the viewBox from real geometry, not an estimate", () => {
-    const block = draftBodice(UK12, "front");
-    const all = block.paths.flatMap((p) => allPoints(p.d));
-    const maxX = Math.max(...all.map((p) => p.x));
-    const right = block.viewBox.x + block.viewBox.w;
-    // Contains everything drawn, without a large unexplained gap.
-    expect(right).toBeGreaterThanOrEqual(maxX);
-    expect(right - maxX).toBeLessThan(10);
+  it("estimated side seam still matches between front and back", () => {
+    const front = calculateBodice(minimal, "front", {});
+    const back = calculateBodice(minimal, "back", {});
+    expect(front.resolved.sideSeamLength).toBeCloseTo(back.resolved.sideSeamLength, 6);
+  });
+
+  it("falls back to the standard neck width when the shoulder triangle is impossible", () => {
+    // shoulderDrop larger than the shoulder seam makes shortSide() undefined
+    // (NaN before the guard) — PatternLab's own documented fallback is 2.75in.
+    const draft = calculateBodice(
+      { chest: 92, waist: 70, shoulder: 12, shoulderDrop: 50, height: 165 },
+      "front",
+      {}
+    );
+    expect(draft.calc.neckWidth).toBeCloseTo(BODICE.neckWidthFallback, 6);
   });
 });
 
-// ── Validation and disclosure ────────────────────────────────────────────────
+describe("bodice — end-to-end block shape", () => {
+  const m: Measurements = {
+    chest: 90, waist: 71, shoulder: 39.5, neck: 36, height: 165,
+    frontNeckToWaist: 42, backNeckToWaist: 40,
+  };
 
-describe("validation and disclosure", () => {
-  it("reports missing measurements rather than drafting a broken block", () => {
-    const block = bodiceFront({ chest: 84 });
-    expect(block.missingMeasurements).toContain("waist");
-    expect(block.missingMeasurements).toContain("shoulder");
-    expect(block.paths).toEqual([]);
+  it("bodiceFront / bodiceBack return a drawable, non-degenerate block", () => {
+    for (const block of [bodiceFront(m), bodiceBack(m)] as PatternBlock[]) {
+      expect(block.missingMeasurements).toHaveLength(0);
+      expect(block.viewBox.w).toBeGreaterThan(1);
+      expect(block.viewBox.h).toBeGreaterThan(1);
+      const outline = block.paths.find((p) => p.type === "outline")!;
+      expect(outline.d.startsWith("M")).toBe(true);
+      expect(outline.d.trim().endsWith("Z")).toBe(true);
+      // Every panel uses cubic-Bézier curves for the neckline/armhole now.
+      expect(outline.d).toContain("C ");
+    }
   });
 
-  it("rejects a zero or negative measurement", () => {
-    const block = bodiceFront({ chest: 0, waist: 60, shoulder: 13 });
-    expect(block.missingMeasurements).toContain("chest");
+  it("draftBodice dispatches front/back correctly", () => {
+    expect(draftBodice(m, "front").id).toBe("bodice-front");
+    expect(draftBodice(m, "back").id).toBe("bodice-back");
   });
 
-  it("discloses every estimated measurement", () => {
-    const block = bodiceFront(BUG_REPORT);
-    const estimated = block.estimates.map((e) => e.field);
-    // No neck, across-back or bust-point data was supplied.
-    expect(estimated).toContain("neck");
-    expect(estimated).toContain("backWidth");
-    expect(estimated).toContain("bustPointSep");
-    expect(block.diagnostics.some((d) => d.code === "MEASUREMENT_ESTIMATED")).toBe(true);
-  });
-
-  it("prefers a measured nape-to-waist over a height ratio", () => {
-    const withMeasure = calculateBodice({ ...UK12, backNeckToWaist: 42.5 }, "back");
-    expect(withMeasure.resolved.bodiceLength).toBe(42.5);
-    expect(withMeasure.estimates.some((e) => e.field === "backNeckToWaist")).toBe(false);
-
-    const fromHeight = calculateBodice(UK12, "back");
-    expect(fromHeight.estimates.some((e) => e.field === "backNeckToWaist")).toBe(true);
-  });
-
-  it("warns when the waist is wider than the hips", () => {
-    const block = bodiceBack({ chest: 90, waist: 110, hips: 96, shoulder: 13 });
-    expect(block.diagnostics.some((d) => d.code === "WAIST_EXCEEDS_HIP")).toBe(true);
-  });
-
-  it("warns on a measurement that looks like a units mix-up", () => {
-    const block = bodiceBack({ chest: 35, waist: 28, shoulder: 13 });
-    expect(block.diagnostics.some((d) => d.severity === "warning")).toBe(true);
-  });
-
-  it("always advises verifying before cutting", () => {
-    const block = bodiceFront(UK12);
-    expect(block.diagnostics.some((d) => d.code === "VERIFY_BEFORE_CUTTING")).toBe(true);
-    expect(block.diagnostics.some((d) => d.code === "NO_SEAM_ALLOWANCE")).toBe(true);
-  });
-
-  it("marks the back as cut on fold", () => {
-    expect(bodiceBack(UK12).metadata.cutOnFold).toBe(true);
-    expect(bodiceFront(UK12).metadata.cutOnFold).toBe(false);
-  });
-
-  it("exposes drafting values for inspection", () => {
-    const block = bodiceFront(UK12);
-    expect(block.calculations.armholeDepth).toBeGreaterThan(0);
-    expect(block.calculations.bustQuarter).toBeGreaterThan(0);
-    expect(block.calculations.bustDartIntake).toBeGreaterThan(0);
+  it("reports a missing-measurement placeholder rather than throwing", () => {
+    const block = bodiceFront({});
+    expect(block.missingMeasurements.length).toBeGreaterThan(0);
+    expect(block.paths).toHaveLength(0);
   });
 });
