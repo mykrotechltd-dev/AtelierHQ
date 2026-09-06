@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { useCustomer, useDeleteCustomer } from "@/lib/queries/customers.ts";
 import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -39,17 +37,14 @@ export default function CustomerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
-  const deleteCustomer = useMutation(api.customers.deleteCustomer);
+  const deleteCustomer = useDeleteCustomer();
 
-  const customer = useQuery(
-    api.customers.getCustomer,
-    id ? { id: id as Id<"customers"> } : "skip"
-  );
+  const customer = useCustomer(id);
 
   const handleDelete = async () => {
     if (!id) return;
     try {
-      await deleteCustomer({ id: id as Id<"customers"> });
+      await deleteCustomer({ id });
       toast.success("Customer deleted");
       navigate("/customers", { replace: true });
     } catch {
@@ -57,7 +52,7 @@ export default function CustomerDetailPage() {
     }
   };
 
-  if (customer === undefined) {
+  if (!customer) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />

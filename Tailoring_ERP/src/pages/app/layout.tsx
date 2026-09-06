@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useQuery } from "convex/react";
-import { Authenticated, AuthLoading } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useSession } from "@/components/providers/auth.tsx";
+import { useMyTenant } from "@/lib/queries/tenants.ts";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import AppSidebar from "./_components/app-sidebar.tsx";
 import MobileNav from "./_components/mobile-nav.tsx";
@@ -10,7 +9,7 @@ import MobileNav from "./_components/mobile-nav.tsx";
 function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
-  const tenant = useQuery(api.tenants.getMyTenant, {});
+  const tenant = useMyTenant();
 
   useEffect(() => {
     if (tenant === undefined) return;
@@ -19,7 +18,7 @@ function AppShell() {
     }
   }, [tenant, navigate]);
 
-  if (tenant === undefined) {
+  if (tenant === undefined || tenant === null) {
     return (
       <div className="flex h-screen">
         <div className="hidden md:flex w-60 flex-col gap-4 p-4 border-r bg-sidebar">
@@ -47,16 +46,22 @@ function AppShell() {
 }
 
 export default function AppLayout() {
-  return (
-    <>
-      <AuthLoading>
-        <div className="flex h-screen items-center justify-center">
-          <Skeleton className="h-8 w-48" />
-        </div>
-      </AuthLoading>
-      <Authenticated>
-        <AppShell />
-      </Authenticated>
-    </>
-  );
+  const navigate = useNavigate();
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      navigate("/login", { replace: true });
+    }
+  }, [status, navigate]);
+
+  if (status !== "authenticated") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Skeleton className="h-8 w-48" />
+      </div>
+    );
+  }
+
+  return <AppShell />;
 }

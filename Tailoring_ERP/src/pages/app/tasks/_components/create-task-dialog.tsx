@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useCreateTask, useWorkers } from "@/lib/queries/workers.ts";
+import { useOrders } from "@/lib/queries/orders.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 const schema = z.object({
   orderId: z.string().min(1, "Select an order"),
@@ -47,19 +46,15 @@ export default function CreateTaskDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  preselectedWorkerId?: Id<"workers">;
+  preselectedWorkerId?: string;
 }) {
-  const createTask = useMutation(api.workers.createTask);
+  const createTask = useCreateTask();
   const [saving, setSaving] = useState(false);
 
-  const ordersResult = useQuery(api.orders.listOrders, {
-    paginationOpts: { numItems: 100, cursor: null },
-  });
-  const workers = useQuery(api.workers.listWorkers, {});
+  const { results: ordersResult } = useOrders(undefined, 100);
+  const workers = useWorkers();
 
-  const orders = (ordersResult?.page ?? []).filter(
-    (o) => o.status !== "delivered"
-  );
+  const orders = ordersResult.filter((o) => o.status !== "delivered");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -76,8 +71,8 @@ export default function CreateTaskDialog({
     setSaving(true);
     try {
       await createTask({
-        orderId: values.orderId as Id<"orders">,
-        workerId: values.workerId as Id<"workers">,
+        orderId: values.orderId,
+        workerId: values.workerId,
         description: values.description,
         dueDate: values.dueDate || undefined,
         payout: values.payout ? parseFloat(values.payout) : undefined,
@@ -114,7 +109,7 @@ export default function CreateTaskDialog({
                     </FormControl>
                     <SelectContent>
                       {orders.map((o) => (
-                        <SelectItem key={o._id} value={o._id}>
+                        <SelectItem key={o.id} value={o.id}>
                           {o.orderNumber} — {o.customerName}
                         </SelectItem>
                       ))}
@@ -140,7 +135,7 @@ export default function CreateTaskDialog({
                       {(workers ?? [])
                         .filter((w) => w.isActive)
                         .map((w) => (
-                          <SelectItem key={w._id} value={w._id}>
+                          <SelectItem key={w.id} value={w.id}>
                             {w.name}
                           </SelectItem>
                         ))}

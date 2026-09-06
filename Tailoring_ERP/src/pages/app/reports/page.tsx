@@ -1,5 +1,10 @@
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMyTenant } from "@/lib/queries/tenants.ts";
+import {
+  useDashboardStats,
+  useRevenueByMonth,
+  useTopCustomers,
+  useWorkerPerformance,
+} from "@/lib/queries/analytics.ts";
 import PageHeader from "@/components/page-header.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -33,11 +38,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function ReportsPage() {
-  const tenant = useQuery(api.tenants.getMyTenant, {});
-  const stats = useQuery(api.analytics.getDashboardStats, {});
-  const revenue = useQuery(api.analytics.getRevenueByMonth, {});
-  const topCustomers = useQuery(api.analytics.getTopCustomers, {});
-  const workerPerf = useQuery(api.analytics.getWorkerPerformance, {});
+  const tenant = useMyTenant();
+  const stats = useDashboardStats();
+  const revenue = useRevenueByMonth();
+  const topCustomers = useTopCustomers();
+  const workerPerf = useWorkerPerformance();
 
   const currency = tenant?.currency ?? "USD";
   const isLoading =

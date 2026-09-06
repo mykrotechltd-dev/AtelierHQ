@@ -1,7 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { useCustomers, useCustomer } from "@/lib/queries/customers.ts";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -48,7 +46,6 @@ import {
 import { downloadPatternsPDF } from "@/lib/pattern-pdf.ts";
 import PatternBlockSVG from "./_components/pattern-block-svg.tsx";
 import CurveEditor from "./_components/curve-editor.tsx";
-import { usePaginatedQuery } from "convex/react";
 import {
   Scissors,
   Download,
@@ -291,7 +288,7 @@ type MeasSource = "bespoke" | "customer" | "standard";
 
 function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => void }) {
   const [measSource, setMeasSource] = useState<MeasSource>("bespoke");
-  const [customerId, setCustomerId] = useState<Id<"customers"> | "">("");
+  const [customerId, setCustomerId] = useState<string | "">("");
   const [ukSize, setUkSize] = useState<UKSize | "">("");
   const [measurements, setMeasurements] = useState<Partial<Record<keyof Measurements, string>>>({});
   const [ease, setEase] = useState<EasePreset>("standard");
@@ -305,16 +302,9 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
   const [editingBlockId, setEditingBlockId] = useState<BlockType | null>(null);
 
   // Customer list
-  const { results: customers, status: custStatus } = usePaginatedQuery(
-    api.customers.listCustomers,
-    { search: undefined },
-    { initialNumItems: 100 }
-  );
+  const { results: customers, status: custStatus } = useCustomers(undefined, 100);
 
-  const selectedCustomer = useQuery(
-    api.customers.getCustomer,
-    customerId ? { id: customerId as Id<"customers"> } : "skip"
-  );
+  const selectedCustomer = useCustomer(customerId || undefined);
 
   // Resolve measurements based on source
   const resolvedMeasurements = useMemo((): Measurements => {
@@ -504,14 +494,14 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
                   ) : (
                     <Select
                       value={customerId}
-                      onValueChange={(v) => setCustomerId(v as Id<"customers"> | "")}
+                      onValueChange={(v) => setCustomerId(v)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a customer…" />
                       </SelectTrigger>
                       <SelectContent>
                         {customers.map((c) => (
-                          <SelectItem key={c._id} value={c._id}>
+                          <SelectItem key={c.id} value={c.id}>
                             {c.name}
                           </SelectItem>
                         ))}

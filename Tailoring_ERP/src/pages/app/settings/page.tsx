@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMyTenant, useUpdateTenant } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,8 +38,8 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function SettingsPage() {
-  const tenant = useQuery(api.tenants.getMyTenant, {});
-  const updateTenant = useMutation(api.tenants.updateTenant);
+  const tenant = useMyTenant();
+  const updateTenant = useUpdateTenant();
   const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({

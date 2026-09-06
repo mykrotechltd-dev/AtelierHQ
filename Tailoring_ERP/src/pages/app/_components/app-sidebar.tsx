@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils.ts";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import type { Tenant } from "@/lib/supabase/types.ts";
 import {
   LayoutDashboard,
   Users,
@@ -21,8 +21,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip.tsx";
-
-type Tenant = Doc<"tenants"> & { role: "owner" | "worker" };
 
 const NAV_ITEMS = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },

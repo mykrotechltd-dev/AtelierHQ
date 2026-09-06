@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { useOrder } from "@/lib/queries/orders.ts";
+import { useMyTenant } from "@/lib/queries/tenants.ts";
+import { usePaymentsByOrder } from "@/lib/queries/payments.ts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
@@ -17,36 +17,41 @@ import { downloadInvoicePDF, buildWhatsAppUrl, type InvoiceData } from "@/lib/in
 export default function InvoiceActions({
   orderId,
 }: {
-  orderId: Id<"orders">;
+  orderId: string;
 }) {
   const [generating, setGenerating] = useState(false);
 
-  const order = useQuery(api.orders.getOrder, { id: orderId });
-  const tenant = useQuery(api.tenants.getMyTenant, {});
-  const paymentSummary = useQuery(api.payments.getPaymentsByOrder, { orderId });
+  const order = useOrder(orderId);
+  const tenant = useMyTenant();
+  const paymentSummary = usePaymentsByOrder(orderId);
 
-  const isReady = order !== undefined && tenant !== undefined && paymentSummary !== undefined;
+  const isReady = !!order && !!tenant && paymentSummary !== undefined;
 
   const buildInvoiceData = (): InvoiceData => {
     if (!order || !tenant || !paymentSummary) throw new Error("Data not loaded");
     return {
       orderNumber: order.orderNumber,
       status: order.status,
-      dueDate: order.dueDate,
-      notes: order.notes,
+      dueDate: order.dueDate ?? undefined,
+      notes: order.notes ?? undefined,
       totalAmount: order.totalAmount,
-      items: order.items,
+      items: order.items.map((i) => ({
+        ...i,
+        garmentType: i.garmentType ?? undefined,
+        fabric: i.fabric ?? undefined,
+        notes: i.notes ?? undefined,
+      })),
       customer: order.customer
         ? {
             name: order.customer.name,
-            phone: order.customer.phone,
-            email: order.customer.email,
+            phone: order.customer.phone ?? undefined,
+            email: order.customer.email ?? undefined,
           }
         : null,
       shop: {
         name: tenant.name,
-        phone: tenant.phone,
-        address: tenant.address,
+        phone: tenant.phone ?? undefined,
+        address: tenant.address ?? undefined,
         currency: tenant.currency,
       },
       payments: paymentSummary.payments.map((p) => ({

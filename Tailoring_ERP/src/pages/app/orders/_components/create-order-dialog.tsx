@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useCreateOrder } from "@/lib/queries/orders.ts";
+import { useCustomers } from "@/lib/queries/customers.ts";
 import { useNavigate } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,14 +59,11 @@ export default function CreateOrderDialog({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
-  const createOrder = useMutation(api.orders.createOrder);
+  const createOrder = useCreateOrder();
   const [saving, setSaving] = useState(false);
 
   // Load customers for selector
-  const customersResult = useQuery(api.customers.listCustomers, {
-    paginationOpts: { numItems: 100, cursor: null },
-  });
-  const customers = customersResult?.page ?? [];
+  const { results: customers } = useCustomers(undefined, 100);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -94,7 +91,7 @@ export default function CreateOrderDialog({
     setSaving(true);
     try {
       const orderId = await createOrder({
-        customerId: values.customerId as Parameters<typeof createOrder>[0]["customerId"],
+        customerId: values.customerId,
         dueDate: values.dueDate || undefined,
         notes: values.notes || undefined,
         items: values.items.map((i) => ({
@@ -142,7 +139,7 @@ export default function CreateOrderDialog({
                       </FormControl>
                       <SelectContent>
                         {customers.map((c) => (
-                          <SelectItem key={c._id} value={c._id}>
+                          <SelectItem key={c.id} value={c.id}>
                             {c.name}
                           </SelectItem>
                         ))}

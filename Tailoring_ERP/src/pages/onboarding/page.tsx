@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useCreateTenant } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -50,7 +49,7 @@ const CURRENCIES = [
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const createTenant = useMutation(api.tenants.createTenant);
+  const createTenant = useCreateTenant();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<FormValues>({

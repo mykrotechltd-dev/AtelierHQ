@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useCreateWorker, useUpdateWorker } from "@/lib/queries/workers.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,7 +20,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form.tsx";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import type { Worker } from "@/lib/supabase/types.ts";
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -37,10 +36,10 @@ export default function WorkerDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  worker?: Doc<"workers">;
+  worker?: Worker;
 }) {
-  const createWorker = useMutation(api.workers.createWorker);
-  const updateWorker = useMutation(api.workers.updateWorker);
+  const createWorker = useCreateWorker();
+  const updateWorker = useUpdateWorker();
   const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({
@@ -57,7 +56,7 @@ export default function WorkerDialog({
     try {
       if (worker) {
         await updateWorker({
-          id: worker._id,
+          id: worker.id,
           name: values.name,
           phone: values.phone || undefined,
           specialization: values.specialization || undefined,

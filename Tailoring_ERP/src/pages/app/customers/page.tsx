@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { usePaginatedQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useCustomers } from "@/lib/queries/customers.ts";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -25,11 +24,7 @@ export default function CustomersPage() {
   const [debouncedSearch] = useDebounce(search, 300);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { results, status, loadMore } = usePaginatedQuery(
-    api.customers.listCustomers,
-    { search: debouncedSearch || undefined },
-    { initialNumItems: 20 }
-  );
+  const { results, status, loadMore } = useCustomers(debouncedSearch || undefined, 20);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -82,8 +77,8 @@ export default function CustomersPage() {
         <div className="space-y-2">
           {results.map((customer) => (
             <button
-              key={customer._id}
-              onClick={() => navigate(`/customers/${customer._id}`)}
+              key={customer.id}
+              onClick={() => navigate(`/customers/${customer.id}`)}
               className={cn(
                 "w-full text-left rounded-lg border border-border bg-card px-4 py-3",
                 "hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
@@ -118,7 +113,7 @@ export default function CustomersPage() {
 
           {status === "CanLoadMore" && (
             <div className="pt-4 text-center">
-              <Button variant="secondary" size="sm" onClick={() => loadMore(20)}>
+              <Button variant="secondary" size="sm" onClick={() => loadMore()}>
                 Load more
               </Button>
             </div>

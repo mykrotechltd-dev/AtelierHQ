@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useCreateCustomer, useUpdateCustomer } from "@/lib/queries/customers.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -23,7 +22,7 @@ import {
   FormMessage,
 } from "@/components/ui/form.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import type { Customer } from "@/lib/supabase/types.ts";
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -45,8 +44,6 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-type CustomerDoc = Doc<"customers">;
-
 function toNum(v: string | undefined): number | undefined {
   if (!v || v.trim() === "") return undefined;
   const n = parseFloat(v);
@@ -60,10 +57,10 @@ export default function CustomerDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  customer?: CustomerDoc;
+  customer?: Customer;
 }) {
-  const createCustomer = useMutation(api.customers.createCustomer);
-  const updateCustomer = useMutation(api.customers.updateCustomer);
+  const createCustomer = useCreateCustomer();
+  const updateCustomer = useUpdateCustomer();
   const [saving, setSaving] = useState(false);
 
   const m = customer?.measurements;
@@ -117,7 +114,7 @@ export default function CustomerDialog({
       };
 
       if (customer) {
-        await updateCustomer({ id: customer._id, ...payload });
+        await updateCustomer({ id: customer.id, ...payload });
         toast.success("Customer updated");
       } else {
         await createCustomer(payload);

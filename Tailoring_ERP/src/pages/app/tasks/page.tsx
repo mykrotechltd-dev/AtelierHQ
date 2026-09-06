@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { useTasks, useUpdateTask, useDeleteTask, useWorkers } from "@/lib/queries/workers.ts";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -48,14 +46,14 @@ const STATUS_NEXT: Record<TaskStatus, TaskStatus | null> = {
 export default function TasksPage() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [payoutOpen, setPayoutOpen] = useState(false);
-  const [filterWorkerId, setFilterWorkerId] = useState<Id<"workers"> | undefined>(undefined);
+  const [filterWorkerId, setFilterWorkerId] = useState<string | undefined>(undefined);
 
-  const tasks = useQuery(api.workers.listTasks, { workerId: filterWorkerId });
-  const workers = useQuery(api.workers.listWorkers, {});
-  const updateTask = useMutation(api.workers.updateTask);
-  const deleteTask = useMutation(api.workers.deleteTask);
+  const tasks = useTasks(undefined, filterWorkerId);
+  const workers = useWorkers();
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
 
-  const handleAdvance = async (taskId: Id<"tasks">, current: TaskStatus) => {
+  const handleAdvance = async (taskId: string, current: TaskStatus) => {
     const next = STATUS_NEXT[current];
     if (!next) return;
     try {
@@ -66,7 +64,7 @@ export default function TasksPage() {
     }
   };
 
-  const handleDelete = async (taskId: Id<"tasks">) => {
+  const handleDelete = async (taskId: string) => {
     try {
       await deleteTask({ id: taskId });
       toast.success("Task deleted");
@@ -107,11 +105,11 @@ export default function TasksPage() {
             .filter((w) => w.isActive)
             .map((w) => (
               <button
-                key={w._id}
-                onClick={() => setFilterWorkerId(w._id as Id<"workers">)}
+                key={w.id}
+                onClick={() => setFilterWorkerId(w.id)}
                 className={cn(
                   "px-3 py-1 rounded-full text-xs font-body border transition-colors cursor-pointer",
-                  filterWorkerId === w._id
+                  filterWorkerId === w.id
                     ? "bg-primary text-primary-foreground border-primary"
                     : "border-border text-muted-foreground hover:border-primary/40"
                 )}
@@ -169,7 +167,7 @@ export default function TasksPage() {
                   ) : (
                     col.map((task) => (
                       <div
-                        key={task._id}
+                        key={task.id}
                         className="rounded-md border border-border bg-background px-3 py-2.5 space-y-1.5"
                       >
                         <p className="font-body text-xs font-medium text-foreground leading-snug">
@@ -189,7 +187,7 @@ export default function TasksPage() {
                             {format(parseISO(task.dueDate), "dd MMM")}
                           </div>
                         )}
-                        {task.payout !== undefined && (
+                        {task.payout != null && (
                           <div className="flex items-center gap-1 text-[11px] text-accent font-body">
                             <Banknote className="size-3" />
                             {task.payout.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -201,7 +199,7 @@ export default function TasksPage() {
                               size="sm"
                               variant="secondary"
                               className="h-6 px-2 text-[11px]"
-                              onClick={() => handleAdvance(task._id as Id<"tasks">, status as TaskStatus)}
+                              onClick={() => handleAdvance(task.id, status as TaskStatus)}
                             >
                               Move <ArrowRight className="size-3 ml-1" />
                             </Button>
@@ -226,7 +224,7 @@ export default function TasksPage() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleDelete(task._id as Id<"tasks">)}
+                                  onClick={() => handleDelete(task.id)}
                                   className="bg-destructive text-white hover:bg-destructive/90"
                                 >
                                   Delete

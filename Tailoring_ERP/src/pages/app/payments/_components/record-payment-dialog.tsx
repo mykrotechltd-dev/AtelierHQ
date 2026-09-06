@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { useRecordPayment } from "@/lib/queries/payments.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -31,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-import { ConvexError } from "convex/values";
 
 const METHODS = [
   { value: "cash", label: "Cash" },
@@ -57,11 +54,11 @@ export default function RecordPaymentDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  orderId: Id<"orders">;
+  orderId: string;
   orderNumber: string;
   outstanding: number;
 }) {
-  const recordPayment = useMutation(api.payments.recordPayment);
+  const recordPayment = useRecordPayment();
   const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({
@@ -93,12 +90,8 @@ export default function RecordPaymentDialog({
       form.reset();
       onClose();
     } catch (err) {
-      if (err instanceof ConvexError) {
-        const data = err.data as { message: string };
-        toast.error(data.message);
-      } else {
-        toast.error("Failed to record payment");
-      }
+      const message = err instanceof Error ? err.message : "Failed to record payment";
+      toast.error(message);
     } finally {
       setSaving(false);
     }

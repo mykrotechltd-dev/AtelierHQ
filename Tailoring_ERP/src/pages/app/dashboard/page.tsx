@@ -1,5 +1,5 @@
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMyTenant } from "@/lib/queries/tenants.ts";
+import { useDashboardStats, useRevenueByMonth } from "@/lib/queries/analytics.ts";
 import PageHeader from "@/components/page-header.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -21,7 +21,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useQuery as useTenantQuery } from "convex/react";
 
 function fmt(n: number, currency: string) {
   return new Intl.NumberFormat("en", {
@@ -32,9 +31,9 @@ function fmt(n: number, currency: string) {
 }
 
 export default function Dashboard() {
-  const tenant = useTenantQuery(api.tenants.getMyTenant, {});
-  const stats = useQuery(api.analytics.getDashboardStats, {});
-  const revenue = useQuery(api.analytics.getRevenueByMonth, {});
+  const tenant = useMyTenant();
+  const stats = useDashboardStats();
+  const revenue = useRevenueByMonth();
 
   const currency = tenant?.currency ?? "USD";
 

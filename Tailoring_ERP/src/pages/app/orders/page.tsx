@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { usePaginatedQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useOrders } from "@/lib/queries/orders.ts";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -32,11 +31,7 @@ export default function OrdersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(undefined);
 
-  const { results, status, loadMore } = usePaginatedQuery(
-    api.orders.listOrders,
-    { status: statusFilter },
-    { initialNumItems: 20 }
-  );
+  const { results, status, loadMore } = useOrders(statusFilter, 20);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -96,8 +91,8 @@ export default function OrdersPage() {
         <div className="space-y-2">
           {results.map((order) => (
             <button
-              key={order._id}
-              onClick={() => navigate(`/orders/${order._id}`)}
+              key={order.id}
+              onClick={() => navigate(`/orders/${order.id}`)}
               className={cn(
                 "w-full text-left rounded-lg border border-border bg-card px-4 py-3",
                 "hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
@@ -132,7 +127,7 @@ export default function OrdersPage() {
 
           {status === "CanLoadMore" && (
             <div className="pt-4 text-center">
-              <Button variant="secondary" size="sm" onClick={() => loadMore(20)}>
+              <Button variant="secondary" size="sm" onClick={() => loadMore()}>
                 Load more
               </Button>
             </div>

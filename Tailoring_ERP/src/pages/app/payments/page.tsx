@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { usePaginatedQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { usePayments, useOutstandingSummary, useDeletePayment, usePaymentsByOrder } from "@/lib/queries/payments.ts";
+import { useOrders } from "@/lib/queries/orders.ts";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -27,7 +26,6 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty.tsx";
-import { useQuery } from "convex/react";
 import { CreditCard, Trash2, TrendingDown, Banknote, Receipt, AlertCircle } from "lucide-react";
 import RecordPaymentDialogInner from "./_components/record-payment-dialog.tsx";
 import { useNavigate } from "react-router-dom";
@@ -56,15 +54,11 @@ export default function PaymentsPage() {
   const navigate = useNavigate();
   const [payDialogOpen, setPayDialogOpen] = useState(false);
 
-  const summary = useQuery(api.payments.getOutstandingSummary, {});
-  const { results, status, loadMore } = usePaginatedQuery(
-    api.payments.listPayments,
-    {},
-    { initialNumItems: 20 }
-  );
-  const deletePayment = useMutation(api.payments.deletePayment);
+  const summary = useOutstandingSummary();
+  const { results, status, loadMore } = usePayments(20);
+  const deletePayment = useDeletePayment();
 
-  const handleDelete = async (id: Id<"payments">) => {
+  const handleDelete = async (id: string) => {
     try {
       await deletePayment({ id });
       toast.success("Payment deleted");
@@ -149,7 +143,7 @@ export default function PaymentsPage() {
         <div className="space-y-2">
           {results.map((payment) => (
             <div
-              key={payment._id}
+              key={payment.id}
               className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
             >
               <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-4 gap-x-4 gap-y-0.5 items-center">
@@ -203,7 +197,7 @@ export default function PaymentsPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => handleDelete(payment._id as Id<"payments">)}
+                        onClick={() => handleDelete(payment.id)}
                         className="bg-destructive text-white hover:bg-destructive/90"
                       >
                         Delete
@@ -217,7 +211,7 @@ export default function PaymentsPage() {
 
           {status === "CanLoadMore" && (
             <div className="text-center pt-2">
-              <Button variant="secondary" size="sm" onClick={() => loadMore(20)}>
+              <Button variant="secondary" size="sm" onClick={() => loadMore()}>
                 Load more
               </Button>
             </div>
@@ -285,23 +279,16 @@ function GlobalRecordPaymentDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const [selectedOrderId, setSelectedOrderId] = useState<Id<"orders"> | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const { results: orders, status: ordersStatus } = usePaginatedQuery(
-    api.orders.listOrders,
-    {},
-    { initialNumItems: 100 }
-  );
+  const { results: orders, status: ordersStatus } = useOrders(undefined, 100);
 
-  const balancesResult = useQuery(
-    api.payments.getPaymentsByOrder,
-    selectedOrderId ? { orderId: selectedOrderId } : "skip"
-  );
+  const balancesResult = usePaymentsByOrder(selectedOrderId ?? undefined);
 
   const [pickOpen, setPickOpen] = useState(true);
 
   const nonDeliveredOrders = orders.filter((o) => o.status !== "delivered");
-  const selectedOrder = orders.find((o) => o._id === selectedOrderId);
+  const selectedOrder = orders.find((o) => o.id === selectedOrderId);
 
   // Step 1: pick order
   if (pickOpen || !selectedOrderId) {
@@ -325,9 +312,9 @@ function GlobalRecordPaymentDialog({
             <div className="space-y-1.5 max-h-72 overflow-y-auto">
               {nonDeliveredOrders.map((order) => (
                 <button
-                  key={order._id}
+                  key={order.id}
                   onClick={() => {
-                    setSelectedOrderId(order._id as Id<"orders">);
+                    setSelectedOrderId(order.id);
                     setPickOpen(false);
                   }}
                   className="w-full text-left rounded-md border border-border px-3 py-2 hover:bg-muted transition-colors cursor-pointer"

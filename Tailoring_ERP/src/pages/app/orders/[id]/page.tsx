@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id, Doc } from "@/convex/_generated/dataModel.d.ts";
+import {
+  useOrder,
+  useAddOrderItem,
+  useUpdateOrderItem,
+  useUpdateOrder,
+  useAdvanceOrderStatus,
+  useDeleteOrderItem,
+  useDeleteOrder,
+} from "@/lib/queries/orders.ts";
+import { usePaymentsByOrder, useDeletePayment } from "@/lib/queries/payments.ts";
+import type { Order, OrderItem } from "@/lib/supabase/types.ts";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -44,9 +52,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-type OrderDoc = Doc<"orders">;
-type OrderItemDoc = Doc<"orderItems">;
-
 // ---- Item form ----
 const itemSchema = z.object({
   description: z.string().min(1, "Required"),
@@ -66,11 +71,11 @@ function ItemDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  orderId: Id<"orders">;
-  item?: OrderItemDoc;
+  orderId: string;
+  item?: OrderItem;
 }) {
-  const addItem = useMutation(api.orders.addOrderItem);
-  const updateItem = useMutation(api.orders.updateOrderItem);
+  const addItem = useAddOrderItem();
+  const updateItem = useUpdateOrderItem();
   const [saving, setSaving] = useState(false);
 
   const form = useForm<ItemFormValues>({
@@ -97,7 +102,7 @@ function ItemDialog({
         notes: values.notes || undefined,
       };
       if (item) {
-        await updateItem({ id: item._id, ...payload });
+        await updateItem({ id: item.id, ...payload });
         toast.success("Item updated");
       } else {
         await addItem({ orderId, ...payload });
@@ -186,9 +191,9 @@ function EditOrderDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  order: OrderDoc;
+  order: Order;
 }) {
-  const updateOrder = useMutation(api.orders.updateOrder);
+  const updateOrder = useUpdateOrder();
   const [saving, setSaving] = useState(false);
   const form = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
@@ -198,7 +203,7 @@ function EditOrderDialog({
   const onSubmit = async (values: EditFormValues) => {
     setSaving(true);
     try {
-      await updateOrder({ id: order._id, dueDate: values.dueDate || undefined, notes: values.notes || undefined });
+      await updateOrder({ id: order.id, dueDate: values.dueDate || undefined, notes: values.notes || undefined });
       toast.success("Order updated");
       onClose();
     } catch { toast.error("Failed to update order"); }
@@ -239,33 +244,27 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<OrderItemDoc | undefined>(undefined);
+  const [editingItem, setEditingItem] = useState<OrderItem | undefined>(undefined);
   const [editOrderOpen, setEditOrderOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
-  const advanceStatus = useMutation(api.orders.advanceOrderStatus);
-  const deleteItem = useMutation(api.orders.deleteOrderItem);
-  const deleteOrder = useMutation(api.orders.deleteOrder);
+  const advanceStatus = useAdvanceOrderStatus();
+  const deleteItem = useDeleteOrderItem();
+  const deleteOrder = useDeleteOrder();
 
-  const order = useQuery(
-    api.orders.getOrder,
-    id ? { id: id as Id<"orders"> } : "skip"
-  );
-  const paymentSummary = useQuery(
-    api.payments.getPaymentsByOrder,
-    id ? { orderId: id as Id<"orders"> } : "skip"
-  );
-  const deletePayment = useMutation(api.payments.deletePayment);
+  const order = useOrder(id);
+  const paymentSummary = usePaymentsByOrder(id);
+  const deletePayment = useDeletePayment();
 
   const handleAdvance = async () => {
     if (!id) return;
     try {
-      await advanceStatus({ id: id as Id<"orders"> });
+      await advanceStatus({ id });
       toast.success("Status updated");
     } catch { toast.error("Could not update status"); }
   };
 
-  const handleDeleteItem = async (itemId: Id<"orderItems">) => {
+  const handleDeleteItem = async (itemId: string) => {
     try {
       await deleteItem({ id: itemId });
       toast.success("Item removed");
@@ -275,13 +274,13 @@ export default function OrderDetailPage() {
   const handleDeleteOrder = async () => {
     if (!id) return;
     try {
-      await deleteOrder({ id: id as Id<"orders"> });
+      await deleteOrder({ id });
       toast.success("Order deleted");
       navigate("/orders", { replace: true });
     } catch { toast.error("Failed to delete order"); }
   };
 
-  if (order === undefined) {
+  if (!order) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
@@ -303,7 +302,7 @@ export default function OrderDetailPage() {
       </button>
 
       <PageHeader title={order.orderNumber}>
-        <InvoiceActions orderId={id as Id<"orders">} />
+        <InvoiceActions orderId={id as string} />
         <Button size="sm" variant="secondary" onClick={() => setEditOrderOpen(true)}>
           <Pencil className="size-3.5 mr-1" /> Edit
         </Button>
@@ -345,7 +344,7 @@ export default function OrderDetailPage() {
               <div>
                 <p className="text-xs text-muted-foreground font-body mb-1">Customer</p>
                 <button
-                  onClick={() => navigate(`/customers/${order.customer!._id}`)}
+                  onClick={() => navigate(`/customers/${order.customer!.id}`)}
                   className="flex items-center gap-1 text-sm font-body text-primary hover:underline cursor-pointer"
                 >
                   <User className="size-3.5" /> {order.customer.name}
@@ -399,7 +398,7 @@ export default function OrderDetailPage() {
           ) : (
             order.items.map((item) => (
               <div
-                key={item._id}
+                key={item.id}
                 className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
@@ -445,7 +444,7 @@ export default function OrderDetailPage() {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => handleDeleteItem(item._id)}
+                          onClick={() => handleDeleteItem(item.id)}
                           className="bg-destructive text-white hover:bg-destructive/90"
                         >
                           Remove
@@ -538,7 +537,7 @@ export default function OrderDetailPage() {
                 <div className="space-y-1.5">
                   {paymentSummary.payments.map((p) => (
                     <div
-                      key={p._id}
+                      key={p.id}
                       className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
                     >
                       <div className="flex items-center gap-3">
@@ -576,7 +575,7 @@ export default function OrderDetailPage() {
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => deletePayment({ id: p._id })}
+                                onClick={() => deletePayment({ id: p.id })}
                                 className="bg-destructive text-white hover:bg-destructive/90"
                               >
                                 Delete
@@ -597,7 +596,7 @@ export default function OrderDetailPage() {
       <ItemDialog
         open={itemDialogOpen}
         onClose={() => { setItemDialogOpen(false); setEditingItem(undefined); }}
-        orderId={id as Id<"orders">}
+        orderId={id as string}
         item={editingItem}
       />
       <EditOrderDialog
@@ -609,7 +608,7 @@ export default function OrderDetailPage() {
         <RecordPaymentDialog
           open={paymentDialogOpen}
           onClose={() => setPaymentDialogOpen(false)}
-          orderId={id as Id<"orders">}
+          orderId={id as string}
           orderNumber={order.orderNumber}
           outstanding={paymentSummary.outstanding}
         />

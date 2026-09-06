@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useRecordPayout, useWorkers } from "@/lib/queries/workers.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -29,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 const schema = z.object({
   workerId: z.string().min(1, "Select a worker"),
@@ -45,10 +43,10 @@ export default function PayoutDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  preselectedWorkerId?: Id<"workers">;
+  preselectedWorkerId?: string;
 }) {
-  const recordPayout = useMutation(api.workers.recordPayout);
-  const workers = useQuery(api.workers.listWorkers, {});
+  const recordPayout = useRecordPayout();
+  const workers = useWorkers();
   const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({
@@ -64,7 +62,7 @@ export default function PayoutDialog({
     setSaving(true);
     try {
       await recordPayout({
-        workerId: values.workerId as Id<"workers">,
+        workerId: values.workerId,
         amount: parseFloat(values.amount),
         notes: values.notes || undefined,
       });
@@ -100,7 +98,7 @@ export default function PayoutDialog({
                     </FormControl>
                     <SelectContent>
                       {(workers ?? []).map((w) => (
-                        <SelectItem key={w._id} value={w._id}>
+                        <SelectItem key={w.id} value={w.id}>
                           {w.name}
                         </SelectItem>
                       ))}

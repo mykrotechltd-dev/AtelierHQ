@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id, Doc } from "@/convex/_generated/dataModel.d.ts";
+import { useWorkers, useDeleteWorker, useUpdateWorker } from "@/lib/queries/workers.ts";
+import type { Worker } from "@/lib/supabase/types.ts";
 import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -32,15 +31,15 @@ import WorkerDialog from "./_components/worker-dialog.tsx";
 import PayoutDialog from "./_components/payout-dialog.tsx";
 
 export default function WorkersPage() {
-  const workers = useQuery(api.workers.listWorkers, {});
-  const deleteWorker = useMutation(api.workers.deleteWorker);
-  const toggleActive = useMutation(api.workers.updateWorker);
+  const workers = useWorkers();
+  const deleteWorker = useDeleteWorker();
+  const toggleActive = useUpdateWorker();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [editWorker, setEditWorker] = useState<Doc<"workers"> | undefined>(undefined);
-  const [payoutWorkerId, setPayoutWorkerId] = useState<Id<"workers"> | undefined>(undefined);
+  const [editWorker, setEditWorker] = useState<Worker | undefined>(undefined);
+  const [payoutWorkerId, setPayoutWorkerId] = useState<string | undefined>(undefined);
 
-  const handleDelete = async (id: Id<"workers">) => {
+  const handleDelete = async (id: string) => {
     try {
       await deleteWorker({ id });
       toast.success("Worker removed");
@@ -49,9 +48,9 @@ export default function WorkersPage() {
     }
   };
 
-  const handleToggleActive = async (worker: Doc<"workers">) => {
+  const handleToggleActive = async (worker: Worker) => {
     try {
-      await toggleActive({ id: worker._id, isActive: !worker.isActive });
+      await toggleActive({ id: worker.id, isActive: !worker.isActive });
       toast.success(worker.isActive ? "Worker deactivated" : "Worker activated");
     } catch {
       toast.error("Failed to update worker");
@@ -101,12 +100,12 @@ export default function WorkersPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {active.map((worker) => (
                   <WorkerCard
-                    key={worker._id}
+                    key={worker.id}
                     worker={worker}
                     onEdit={() => setEditWorker(worker)}
-                    onDelete={() => handleDelete(worker._id)}
+                    onDelete={() => handleDelete(worker.id)}
                     onToggleActive={() => handleToggleActive(worker)}
-                    onPayout={() => setPayoutWorkerId(worker._id)}
+                    onPayout={() => setPayoutWorkerId(worker.id)}
                   />
                 ))}
               </div>
@@ -122,12 +121,12 @@ export default function WorkersPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {inactive.map((worker) => (
                   <WorkerCard
-                    key={worker._id}
+                    key={worker.id}
                     worker={worker}
                     onEdit={() => setEditWorker(worker)}
-                    onDelete={() => handleDelete(worker._id)}
+                    onDelete={() => handleDelete(worker.id)}
                     onToggleActive={() => handleToggleActive(worker)}
-                    onPayout={() => setPayoutWorkerId(worker._id)}
+                    onPayout={() => setPayoutWorkerId(worker.id)}
                   />
                 ))}
               </div>
@@ -158,7 +157,7 @@ function WorkerCard({
   onToggleActive,
   onPayout,
 }: {
-  worker: Doc<"workers">;
+  worker: Worker;
   onEdit: () => void;
   onDelete: () => void;
   onToggleActive: () => void;
