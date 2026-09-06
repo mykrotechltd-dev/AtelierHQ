@@ -24,7 +24,7 @@ export function useMyTenant(): Tenant | null | undefined {
     queryFn: async () => {
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("role, tenants(*)")
+        .select("role, tenants!profiles_tenant_id_fkey(*)")
         .eq("id", userId!)
         .maybeSingle();
       if (profileError) throw profileError;
