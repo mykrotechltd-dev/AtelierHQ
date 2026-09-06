@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/queries/customers.ts";
+import { useMeasurementUnit } from "@/components/providers/measurement-unit.tsx";
+import { UnitToggle } from "@/components/ui/unit-toggle.tsx";
+import { cmToUnit, unitToCm, unitLabel, type MeasurementUnit } from "@/lib/units.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -50,6 +53,18 @@ function toNum(v: string | undefined): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
+/** Parses a typed length value in the given display unit and converts to cm
+ *  for storage — `measurements` are always stored in cm. */
+function toNumCm(v: string | undefined, unit: MeasurementUnit): number | undefined {
+  const n = toNum(v);
+  return n === undefined ? undefined : unitToCm(n, unit);
+}
+
+/** Formats a stored cm value for display in the given unit — "" when absent. */
+function fromCm(cm: number | undefined, unit: MeasurementUnit): string {
+  return cm === undefined ? "" : (Math.round(cmToUnit(cm, unit) * 10) / 10).toString();
+}
+
 export default function CustomerDialog({
   open,
   onClose,
@@ -62,6 +77,7 @@ export default function CustomerDialog({
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const [saving, setSaving] = useState(false);
+  const { unit } = useMeasurementUnit();
 
   const m = customer?.measurements;
   const form = useForm<FormValues>({
@@ -71,16 +87,16 @@ export default function CustomerDialog({
       phone: customer?.phone ?? "",
       email: customer?.email ?? "",
       notes: customer?.notes ?? "",
-      chest: m?.chest?.toString() ?? "",
-      waist: m?.waist?.toString() ?? "",
-      hips: m?.hips?.toString() ?? "",
-      shoulder: m?.shoulder?.toString() ?? "",
-      sleeveLength: m?.sleeveLength?.toString() ?? "",
-      inseam: m?.inseam?.toString() ?? "",
-      neck: m?.neck?.toString() ?? "",
-      thigh: m?.thigh?.toString() ?? "",
-      height: m?.height?.toString() ?? "",
-      weight: m?.weight?.toString() ?? "",
+      chest: fromCm(m?.chest, unit),
+      waist: fromCm(m?.waist, unit),
+      hips: fromCm(m?.hips, unit),
+      shoulder: fromCm(m?.shoulder, unit),
+      sleeveLength: fromCm(m?.sleeveLength, unit),
+      inseam: fromCm(m?.inseam, unit),
+      neck: fromCm(m?.neck, unit),
+      thigh: fromCm(m?.thigh, unit),
+      height: fromCm(m?.height, unit),
+      weight: m?.weight?.toString() ?? "", // kg — not a length, never converted
       measurementNotes: m?.notes ?? "",
     },
   });
@@ -89,16 +105,16 @@ export default function CustomerDialog({
     setSaving(true);
     try {
       const measurements = {
-        chest: toNum(values.chest),
-        waist: toNum(values.waist),
-        hips: toNum(values.hips),
-        shoulder: toNum(values.shoulder),
-        sleeveLength: toNum(values.sleeveLength),
-        inseam: toNum(values.inseam),
-        neck: toNum(values.neck),
-        thigh: toNum(values.thigh),
-        height: toNum(values.height),
-        weight: toNum(values.weight),
+        chest: toNumCm(values.chest, unit),
+        waist: toNumCm(values.waist, unit),
+        hips: toNumCm(values.hips, unit),
+        shoulder: toNumCm(values.shoulder, unit),
+        sleeveLength: toNumCm(values.sleeveLength, unit),
+        inseam: toNumCm(values.inseam, unit),
+        neck: toNumCm(values.neck, unit),
+        thigh: toNumCm(values.thigh, unit),
+        height: toNumCm(values.height, unit),
+        weight: toNum(values.weight), // kg — not a length, never converted
         notes: values.measurementNotes || undefined,
       };
       const hasMeasurements = Object.values(measurements).some(
@@ -206,21 +222,24 @@ export default function CustomerDialog({
               </TabsContent>
 
               <TabsContent value="measurements" className="space-y-4">
-                <p className="text-xs text-muted-foreground font-body">
-                  All measurements in centimetres (cm)
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground font-body">
+                    All measurements in {unit === "in" ? "inches" : "centimetres"} ({unitLabel(unit)}), except weight
+                  </p>
+                  <UnitToggle />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   {(
                     [
-                      ["chest", "Chest"],
-                      ["waist", "Waist"],
-                      ["hips", "Hips"],
-                      ["shoulder", "Shoulder"],
-                      ["sleeveLength", "Sleeve length"],
-                      ["inseam", "Inseam"],
-                      ["neck", "Neck"],
-                      ["thigh", "Thigh"],
-                      ["height", "Height"],
+                      ["chest", `Chest (${unitLabel(unit)})`],
+                      ["waist", `Waist (${unitLabel(unit)})`],
+                      ["hips", `Hips (${unitLabel(unit)})`],
+                      ["shoulder", `Shoulder (${unitLabel(unit)})`],
+                      ["sleeveLength", `Sleeve length (${unitLabel(unit)})`],
+                      ["inseam", `Inseam (${unitLabel(unit)})`],
+                      ["neck", `Neck (${unitLabel(unit)})`],
+                      ["thigh", `Thigh (${unitLabel(unit)})`],
+                      ["height", `Height (${unitLabel(unit)})`],
                       ["weight", "Weight (kg)"],
                     ] as const
                   ).map(([key, label]) => (

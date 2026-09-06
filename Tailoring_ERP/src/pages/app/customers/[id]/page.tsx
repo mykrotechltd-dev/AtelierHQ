@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCustomer, useDeleteCustomer } from "@/lib/queries/customers.ts";
+import { useMeasurementUnit } from "@/components/providers/measurement-unit.tsx";
+import { UnitToggle } from "@/components/ui/unit-toggle.tsx";
+import { formatMeasurement, unitLabel } from "@/lib/units.ts";
 import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -38,6 +41,7 @@ export default function CustomerDetailPage() {
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
   const deleteCustomer = useDeleteCustomer();
+  const { unit } = useMeasurementUnit();
 
   const customer = useCustomer(id);
 
@@ -136,18 +140,21 @@ export default function CustomerDetailPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="font-sans text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-              <Ruler className="size-4" /> Measurements (cm)
+              <Ruler className="size-4" /> Measurements
             </CardTitle>
-            {!customer.measurements && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setEditOpen(true)}
-                className="text-xs"
-              >
-                Add measurements
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {customer.measurements && <UnitToggle />}
+              {!customer.measurements && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setEditOpen(true)}
+                  className="text-xs"
+                >
+                  Add measurements
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -157,10 +164,13 @@ export default function CustomerDetailPage() {
                 {Object.entries(MEASUREMENT_LABELS).map(([key, label]) => {
                   const val = customer.measurements?.[key as keyof typeof customer.measurements];
                   if (val === undefined || val === null || typeof val === "string") return null;
+                  const isWeight = key === "weight";
                   return (
                     <div key={key} className="bg-muted rounded-md px-3 py-2">
                       <p className="text-xs text-muted-foreground font-body">{label}</p>
-                      <p className="font-sans font-medium text-sm">{val} cm</p>
+                      <p className="font-sans font-medium text-sm">
+                        {isWeight ? val : formatMeasurement(val, unit)} {isWeight ? "kg" : unitLabel(unit)}
+                      </p>
                     </div>
                   );
                 })}

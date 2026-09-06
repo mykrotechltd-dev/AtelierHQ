@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
 import { useCustomers, useCustomer } from "@/lib/queries/customers.ts";
+import { useMeasurementUnit } from "@/components/providers/measurement-unit.tsx";
+import { UnitToggle } from "@/components/ui/unit-toggle.tsx";
+import { cmToUnit, unitToCm, formatMeasurement, unitLabel } from "@/lib/units.ts";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -309,6 +312,7 @@ function Catalog({ onSelect }: { onSelect: (e: CatalogEntry) => void }) {
 type MeasSource = "bespoke" | "customer" | "standard";
 
 function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => void }) {
+  const { unit } = useMeasurementUnit();
   const [measSource, setMeasSource] = useState<MeasSource>("bespoke");
   const [customerId, setCustomerId] = useState<string | "">("");
   const [ukSize, setUkSize] = useState<UKSize | "">("");
@@ -586,14 +590,22 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
               {/* Bespoke measurement fields */}
               {measSource === "bespoke" && (
                 <div className="space-y-3 mt-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium">Units</Label>
+                    <UnitToggle />
+                  </div>
                   {relevantFields.map((field) => {
                     const isRequired = entry.required.includes(field.key);
+                    // `measurements` is always stored in cm — only the
+                    // displayed/typed value is converted to the selected unit.
+                    const storedCm = parseFloat(measurements[field.key] ?? "");
+                    const displayValue = !isNaN(storedCm) ? formatMeasurement(storedCm, unit) : "";
                     return (
                       <div key={field.key}>
                         <div className="flex items-center justify-between mb-1">
                           <Label className="text-xs font-medium">
                             {field.label}{" "}
-                            <span className="text-muted-foreground font-normal">(cm)</span>
+                            <span className="text-muted-foreground font-normal">({unitLabel(unit)})</span>
                           </Label>
                           {isRequired && (
                             <span className="text-[10px] text-destructive font-medium">required</span>
@@ -605,10 +617,15 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
                           step="0.5"
                           placeholder="0"
                           className="text-sm"
-                          value={measurements[field.key] ?? ""}
-                          onChange={(e) =>
-                            setMeasurements((prev) => ({ ...prev, [field.key]: e.target.value }))
-                          }
+                          value={displayValue}
+                          onChange={(e) => {
+                            const typed = parseFloat(e.target.value);
+                            const cm = isNaN(typed) ? undefined : unitToCm(typed, unit);
+                            setMeasurements((prev) => ({
+                              ...prev,
+                              [field.key]: cm === undefined ? "" : String(cm),
+                            }));
+                          }}
                         />
                         <p className="text-[11px] text-muted-foreground mt-0.5">{field.hint}</p>
                       </div>
@@ -653,45 +670,51 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
                 </p>
               </div>
 
-              {/* Skirt length (skirt only) */}
+              {/* Skirt length (skirt only) — state stays in cm; display/input convert. */}
               {entry.id === "skirt" && (
                 <div>
                   <Label className="text-xs font-medium mb-1 block">
-                    Skirt length <span className="text-muted-foreground font-normal">(cm)</span>
+                    Skirt length <span className="text-muted-foreground font-normal">({unitLabel(unit)})</span>
                   </Label>
                   <Input
                     type="number"
-                    min="30"
-                    max="120"
-                    step="1"
+                    min={cmToUnit(30, unit)}
+                    max={cmToUnit(120, unit)}
+                    step="0.5"
                     className="text-sm"
-                    value={skirtLength}
-                    onChange={(e) => setSkirtLength(e.target.value)}
+                    value={formatMeasurement(parseFloat(skirtLength) || 60, unit)}
+                    onChange={(e) => {
+                      const typed = parseFloat(e.target.value);
+                      setSkirtLength(isNaN(typed) ? "60" : String(unitToCm(typed, unit)));
+                    }}
                   />
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Waist to hem. Default 60 cm (midi).
+                    Waist to hem. Default {formatMeasurement(60, unit)} {unitLabel(unit)} (midi).
                   </p>
                 </div>
               )}
 
-              {/* Dress skirt length (dress only) */}
+              {/* Dress skirt length (dress only) — same cm-stored/unit-displayed pattern. */}
               {entry.id === "dress" && (
                 <div>
                   <Label className="text-xs font-medium mb-1 block">
                     Skirt length below waist{" "}
-                    <span className="text-muted-foreground font-normal">(cm)</span>
+                    <span className="text-muted-foreground font-normal">({unitLabel(unit)})</span>
                   </Label>
                   <Input
                     type="number"
-                    min="30"
-                    max="130"
-                    step="1"
+                    min={cmToUnit(30, unit)}
+                    max={cmToUnit(130, unit)}
+                    step="0.5"
                     className="text-sm"
-                    value={dressLength}
-                    onChange={(e) => setDressLength(e.target.value)}
+                    value={formatMeasurement(parseFloat(dressLength) || 70, unit)}
+                    onChange={(e) => {
+                      const typed = parseFloat(e.target.value);
+                      setDressLength(isNaN(typed) ? "70" : String(unitToCm(typed, unit)));
+                    }}
                   />
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Waist to hem. Default 70 cm (below the knee).
+                    Waist to hem. Default {formatMeasurement(70, unit)} {unitLabel(unit)} (below the knee).
                   </p>
                 </div>
               )}
@@ -937,7 +960,9 @@ function DraftWorkspace({ entry, onBack }: { entry: CatalogEntry; onBack: () => 
                   {ALL_FIELDS.filter((f) => resolvedMeasurements[f.key] !== undefined).map((f) => (
                     <div key={f.key}>
                       <p className="text-[10px] text-muted-foreground uppercase">{f.label}</p>
-                      <p className="text-sm font-medium">{resolvedMeasurements[f.key]} cm</p>
+                      <p className="text-sm font-medium">
+                        {formatMeasurement(resolvedMeasurements[f.key]!, unit)} {unitLabel(unit)}
+                      </p>
                     </div>
                   ))}
                 </div>
