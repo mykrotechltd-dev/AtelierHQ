@@ -13,7 +13,7 @@ create extension if not exists "pgcrypto";
 create type user_role      as enum ('owner', 'worker');
 create type order_status   as enum ('received', 'in_progress', 'completed', 'delivered');
 create type task_status    as enum ('pending', 'in_progress', 'done');
-create type payment_method as enum ('cash', 'bank_transfer', 'card', 'other', 'stripe');
+create type payment_method as enum ('cash', 'bank_transfer', 'card', 'other', 'stripe', 'fincra');
 
 -- ----------------------------------------------------------------------------
 -- TENANTS  (one row per tailoring business)
@@ -25,14 +25,6 @@ create table tenants (
   address     text,
   currency    text not null default 'USD',
   owner_id    uuid,                      -- set after the owner profile is created
-  -- Stripe Connect: a client-safe cache of what Stripe reports for this
-  -- tenant's connected account. No secrets here — see the stripe-connect
-  -- edge function, which alone holds the platform's Stripe secret key.
-  stripe_connect_account_id text,
-  stripe_onboarding_status  text not null default 'not_started'
-    check (stripe_onboarding_status in ('not_started', 'pending', 'active', 'restricted')),
-  stripe_country            text,
-  stripe_default_currency   text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -221,6 +213,24 @@ create table worker_payouts (
 create index worker_payouts_tenant_idx on worker_payouts(tenant_id);
 create index worker_payouts_worker_idx on worker_payouts(worker_id);
 create index worker_payouts_order_idx on worker_payouts(order_id);
+
+-- ----------------------------------------------------------------------------
+-- FINCRA SETTINGS  (per-tenant Fincra credentials — each shop connects its
+-- own Fincra business account directly, since Fincra has no confirmed public
+-- API for a platform to create per-tenant sub-accounts). RLS is enabled with
+-- ZERO policies: no client role can select/insert/update/delete this table
+-- directly — only set_fincra_settings()/get_fincra_settings_public() below,
+-- and the fincra-checkout edge function via the service-role key.
+-- ----------------------------------------------------------------------------
+create table fincra_settings (
+  tenant_id       uuid primary key references tenants(id) on delete cascade,
+  business_id     text not null,
+  public_key      text not null,
+  secret_key      text not null,
+  webhook_secret  text not null,
+  is_live         boolean not null default false,
+  updated_at      timestamptz not null default now()
+);
 
 -- ============================================================================
 -- TRIGGERS
@@ -507,6 +517,58 @@ begin
 end;
 $$;
 
+-- writes this tenant's Fincra credentials (owner-only); secrets are never
+-- readable back through this or any other client-facing function
+create or replace function set_fincra_settings(
+  p_business_id text,
+  p_public_key text,
+  p_secret_key text,
+  p_webhook_secret text,
+  p_is_live boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid := current_tenant_id();
+begin
+  if current_user_role() <> 'owner' then
+    raise exception 'Only the shop owner can connect Fincra';
+  end if;
+
+  insert into fincra_settings (tenant_id, business_id, public_key, secret_key, webhook_secret, is_live, updated_at)
+  values (v_tenant_id, p_business_id, p_public_key, p_secret_key, p_webhook_secret, p_is_live, now())
+  on conflict (tenant_id) do update set
+    business_id = excluded.business_id,
+    public_key = excluded.public_key,
+    secret_key = excluded.secret_key,
+    webhook_secret = excluded.webhook_secret,
+    is_live = excluded.is_live,
+    updated_at = now();
+end;
+$$;
+
+-- client-safe read of this tenant's Fincra connection: never returns
+-- secret_key or webhook_secret
+create or replace function get_fincra_settings_public()
+returns jsonb
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select jsonb_build_object(
+    'businessId', business_id,
+    'publicKey', public_key,
+    'isLive', is_live,
+    'connected', true
+  )
+  from fincra_settings
+  where tenant_id = current_tenant_id();
+$$;
+
 -- ============================================================================
 -- ANALYTICS (read-only, RLS-scoped via current_tenant_id())
 -- ============================================================================
@@ -685,6 +747,11 @@ alter table worker_payouts    enable row level security;
 alter table tenant_order_seq  enable row level security;
 -- no policies on tenant_order_seq: only ever touched by the
 -- security definer generate_order_number(), never directly by clients
+alter table fincra_settings   enable row level security;
+-- no policies on fincra_settings either: secrets are only ever written via
+-- set_fincra_settings() and read (non-secret fields only) via
+-- get_fincra_settings_public(), or by the fincra-checkout edge function
+-- using the service-role key, which bypasses RLS entirely
 
 create policy tenants_select on tenants
   for select using (id = current_tenant_id());

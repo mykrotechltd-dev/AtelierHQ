@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useRecordPayment, useCreateStripeCheckoutSession } from "@/lib/queries/payments.ts";
-import { useMyTenant } from "@/lib/queries/tenants.ts";
+import { useRecordPayment, useCreateFincraCheckout } from "@/lib/queries/payments.ts";
+import { useFincraSettings } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -61,8 +61,8 @@ export default function RecordPaymentDialog({
   outstanding: number;
 }) {
   const recordPayment = useRecordPayment();
-  const createCheckoutSession = useCreateStripeCheckoutSession();
-  const tenant = useMyTenant();
+  const createFincraCheckout = useCreateFincraCheckout();
+  const fincraSettings = useFincraSettings();
   const [saving, setSaving] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -74,7 +74,7 @@ export default function RecordPaymentDialog({
     }
     setRedirecting(true);
     try {
-      const url = await createCheckoutSession({ orderId, amount });
+      const url = await createFincraCheckout({ orderId, amount });
       window.location.href = url;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to start checkout";
@@ -135,7 +135,7 @@ export default function RecordPaymentDialog({
           </div>
         )}
 
-        {tenant?.stripeOnboardingStatus === "active" && (
+        {fincraSettings?.connected && (
           <Button
             type="button"
             variant="secondary"
@@ -144,7 +144,7 @@ export default function RecordPaymentDialog({
             onClick={handlePayByCard}
           >
             <CreditCard className="size-3.5 mr-1" />
-            {redirecting ? "Redirecting to Stripe…" : "Pay by card (Stripe Checkout)"}
+            {redirecting ? "Redirecting to Fincra…" : "Pay by card (Fincra Checkout)"}
           </Button>
         )}
 

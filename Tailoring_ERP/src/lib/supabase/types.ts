@@ -5,9 +5,8 @@
 
 export type OrderStatus = "received" | "in_progress" | "completed" | "delivered";
 export type TaskStatus = "pending" | "in_progress" | "done";
-export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other" | "stripe";
+export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other" | "stripe" | "fincra";
 export type UserRole = "owner" | "worker";
-export type StripeOnboardingStatus = "not_started" | "pending" | "active" | "restricted";
 
 export interface Measurements {
   chest?: number;
@@ -34,10 +33,6 @@ export interface Database {
           address: string | null;
           currency: string;
           owner_id: string | null;
-          stripe_connect_account_id: string | null;
-          stripe_onboarding_status: StripeOnboardingStatus;
-          stripe_country: string | null;
-          stripe_default_currency: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -215,10 +210,15 @@ export interface Tenant {
   address: string | null;
   currency: string;
   role?: UserRole;
-  stripeConnectAccountId: string | null;
-  stripeOnboardingStatus: StripeOnboardingStatus;
-  stripeCountry: string | null;
-  stripeDefaultCurrency: string | null;
+}
+
+/** Client-safe view of a tenant's Fincra connection — never carries the
+ *  secret key or webhook secret (see get_fincra_settings_public()). */
+export interface FincraSettingsPublic {
+  businessId: string;
+  publicKey: string;
+  isLive: boolean;
+  connected: boolean;
 }
 
 export interface Customer {

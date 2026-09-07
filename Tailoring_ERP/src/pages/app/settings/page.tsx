@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useMyTenant, useUpdateTenant, useConnectStripe, useRefreshStripeStatus } from "@/lib/queries/tenants.ts";
+import { useState } from "react";
+import { useMyTenant, useUpdateTenant, useFincraSettings, useSetFincraSettings } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,8 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { CreditCard, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { CreditCard, CheckCircle2 } from "lucide-react";
 
 const CURRENCIES = [
   "USD","NGN","GBP","EUR","GHS","KES","ZAR","INR","CAD","AUD",
@@ -39,38 +39,19 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+const fincraSchema = z.object({
+  businessId: z.string().min(1, "Required"),
+  publicKey: z.string().min(1, "Required"),
+  secretKey: z.string().min(1, "Required"),
+  webhookSecret: z.string().min(1, "Required"),
+  isLive: z.boolean(),
+});
+type FincraFormValues = z.infer<typeof fincraSchema>;
+
 export default function SettingsPage() {
   const tenant = useMyTenant();
   const updateTenant = useUpdateTenant();
-  const connectStripe = useConnectStripe();
-  const refreshStripeStatus = useRefreshStripeStatus();
   const [saving, setSaving] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // Returning from Stripe's hosted onboarding — re-sync the live status.
-  useEffect(() => {
-    if (searchParams.get("stripe") === "return") {
-      refreshStripeStatus()
-        .catch(() => toast.error("Could not refresh Stripe status"))
-        .finally(() => {
-          searchParams.delete("stripe");
-          setSearchParams(searchParams, { replace: true });
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const handleConnectStripe = async () => {
-    setConnecting(true);
-    try {
-      const url = await connectStripe();
-      window.location.href = url;
-    } catch {
-      toast.error("Could not start Stripe onboarding");
-      setConnecting(false);
-    }
-  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -170,57 +151,124 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {tenant !== undefined && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="font-sans text-lg flex items-center gap-2">
-              <CreditCard className="size-4" /> Stripe Payments
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {tenant?.stripeOnboardingStatus === "active" ? (
-              <>
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="size-4" />
-                  <span className="text-sm font-body font-medium">Connected and accepting card payments</span>
-                </div>
-                <p className="text-xs text-muted-foreground font-body">
-                  Account country: {tenant.stripeCountry ?? "—"} · Currency: {tenant.stripeDefaultCurrency ?? "—"}
-                </p>
-              </>
-            ) : tenant?.stripeOnboardingStatus === "pending" ? (
-              <>
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                  <Clock className="size-4" />
-                  <span className="text-sm font-body font-medium">Onboarding in progress with Stripe</span>
-                </div>
-                <Button size="sm" variant="secondary" disabled={connecting} onClick={handleConnectStripe}>
-                  {connecting ? "Redirecting…" : "Continue onboarding"}
-                </Button>
-              </>
-            ) : tenant?.stripeOnboardingStatus === "restricted" ? (
-              <>
-                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                  <AlertTriangle className="size-4" />
-                  <span className="text-sm font-body font-medium">Stripe has restricted this account — more information is needed</span>
-                </div>
-                <Button size="sm" variant="secondary" disabled={connecting} onClick={handleConnectStripe}>
-                  {connecting ? "Redirecting…" : "Resolve on Stripe"}
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground font-body">
-                  Connect a Stripe account to accept card payments from customers, directly into your own bank account.
-                </p>
-                <Button size="sm" disabled={connecting} onClick={handleConnectStripe}>
-                  {connecting ? "Redirecting…" : "Connect with Stripe"}
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {tenant !== undefined && <FincraCard />}
     </div>
+  );
+}
+
+// ── Fincra credentials ───────────────────────────────────────────────────────
+// Each shop connects its own Fincra business account directly — there's no
+// confirmed public API for this platform to create per-tenant sub-accounts.
+// The secret key and webhook secret are write-only from here on: once saved
+// they're never read back (see get_fincra_settings_public()).
+
+function FincraCard() {
+  const fincraSettings = useFincraSettings();
+  const setFincraSettings = useSetFincraSettings();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const form = useForm<FincraFormValues>({
+    resolver: zodResolver(fincraSchema),
+    defaultValues: { businessId: "", publicKey: "", secretKey: "", webhookSecret: "", isLive: false },
+  });
+
+  const onSubmit = async (values: FincraFormValues) => {
+    setSaving(true);
+    try {
+      await setFincraSettings(values);
+      toast.success("Fincra connected");
+      form.reset();
+      setEditing(false);
+    } catch {
+      toast.error("Failed to save Fincra credentials");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="font-sans text-lg flex items-center gap-2">
+          <CreditCard className="size-4" /> Fincra Payments
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {fincraSettings === undefined ? (
+          <Skeleton className="h-24 w-full" />
+        ) : fincraSettings?.connected && !editing ? (
+          <>
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="size-4" />
+              <span className="text-sm font-body font-medium">Connected and accepting card payments</span>
+            </div>
+            <p className="text-xs text-muted-foreground font-body">
+              Business ID: {fincraSettings.businessId} · Mode: {fincraSettings.isLive ? "Live" : "Sandbox"}
+            </p>
+            <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+              Update credentials
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground font-body">
+              Connect your own Fincra business account to accept card payments — sign up at fincra.com if
+              you haven't already, then paste your credentials from the Fincra dashboard below.
+            </p>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+                <FormField control={form.control} name="businessId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Business ID</FormLabel>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="publicKey" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Public key</FormLabel>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="secretKey" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Secret key</FormLabel>
+                    <FormControl><Input type="password" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="webhookSecret" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Webhook secret</FormLabel>
+                    <FormControl><Input type="password" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="isLive" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                    </FormControl>
+                    <FormLabel className="text-xs font-normal">Live mode (uncheck for sandbox/test keys)</FormLabel>
+                  </FormItem>
+                )} />
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm" disabled={saving}>
+                    {saving ? "Saving..." : "Save credentials"}
+                  </Button>
+                  {fincraSettings?.connected && (
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(false)}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </Form>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

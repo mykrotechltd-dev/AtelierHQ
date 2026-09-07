@@ -135,13 +135,13 @@ export function useRecordPayment() {
   return mutateAsync;
 }
 
-/** Creates a Stripe Checkout Session as a direct charge on this tenant's
- *  connected account and returns the Stripe-hosted URL to redirect to. The
- *  resulting `payments` row is created only by the webhook on success —
- *  never by the client, so an abandoned checkout leaves no record. */
-export function useCreateStripeCheckoutSession() {
+/** Creates a Fincra checkout on this tenant's own connected Fincra business
+ *  account and returns the hosted URL to redirect to. The resulting
+ *  `payments` row is created only by the webhook on success — never by the
+ *  client, so an abandoned checkout leaves no record. */
+export function useCreateFincraCheckout() {
   return async (input: { orderId: string; amount: number }) => {
-    const { data, error } = await supabase.functions.invoke("stripe-connect/create-checkout-session", {
+    const { data, error } = await supabase.functions.invoke("fincra-checkout/initiate", {
       body: { orderId: input.orderId, amount: input.amount },
     });
     if (error) throw error;

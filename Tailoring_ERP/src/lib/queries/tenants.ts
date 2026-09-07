@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
-import type { Tenant, UserRole } from "../supabase/types.ts";
+import type { FincraSettingsPublic, Tenant, UserRole } from "../supabase/types.ts";
 import { useSession } from "../../components/providers/auth.tsx";
 
 function mapTenant(row: Record<string, unknown>, role?: UserRole): Tenant {
@@ -11,10 +11,6 @@ function mapTenant(row: Record<string, unknown>, role?: UserRole): Tenant {
     address: (row.address as string) ?? null,
     currency: row.currency as string,
     role,
-    stripeConnectAccountId: (row.stripe_connect_account_id as string) ?? null,
-    stripeOnboardingStatus: (row.stripe_onboarding_status as Tenant["stripeOnboardingStatus"]) ?? "not_started",
-    stripeCountry: (row.stripe_country as string) ?? null,
-    stripeDefaultCurrency: (row.stripe_default_currency as string) ?? null,
   };
 }
 
@@ -61,30 +57,45 @@ export function useCreateTenant() {
   return mutateAsync;
 }
 
-// ── Stripe Connect ────────────────────────────────────────────────────────────
-// All three routes live in the single `stripe-connect` edge function — see
-// supabase/functions/stripe-connect. The platform's Stripe secret key never
-// leaves that function; the client only ever gets back a URL or a status.
+// ── Fincra ──────────────────────────────────────────────────────────────────
+// Each tenant connects its own Fincra business account directly (there's no
+// confirmed public API for this platform to create per-tenant sub-accounts
+// the way Stripe Connect did). Credentials are written via set_fincra_settings
+// and never read back — see supabase/migrations/0003_fincra.sql.
 
-/** Starts (or resumes) this tenant's Stripe Express onboarding — returns the
- *  Stripe-hosted URL to redirect the browser to. */
-export function useConnectStripe() {
-  return async () => {
-    const { data, error } = await supabase.functions.invoke("stripe-connect/create-account-link");
-    if (error) throw error;
-    return (data as { url: string }).url;
-  };
+/** This tenant's Fincra connection, or null if nothing has been saved yet —
+ *  never carries the secret key or webhook secret. */
+export function useFincraSettings(): FincraSettingsPublic | null | undefined {
+  const { session } = useSession();
+  const userId = session?.user.id;
+  const query = useQuery({
+    queryKey: ["fincraSettings", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_fincra_settings_public");
+      if (error) throw error;
+      return (data as FincraSettingsPublic | null) ?? null;
+    },
+    enabled: !!userId,
+  });
+  return query.isLoading ? undefined : (query.data ?? null);
 }
 
-/** Re-syncs stripeOnboardingStatus/country/currency from the live Stripe
- *  Account object — call this when the user returns from Stripe onboarding. */
-export function useRefreshStripeStatus() {
+export function useSetFincraSettings() {
   const qc = useQueryClient();
-  return async () => {
-    const { error } = await supabase.functions.invoke("stripe-connect/account-status");
-    if (error) throw error;
-    await qc.invalidateQueries({ queryKey: ["tenant"] });
-  };
+  const { mutateAsync } = useMutation({
+    mutationFn: async (input: { businessId: string; publicKey: string; secretKey: string; webhookSecret: string; isLive: boolean }) => {
+      const { error } = await supabase.rpc("set_fincra_settings", {
+        p_business_id: input.businessId,
+        p_public_key: input.publicKey,
+        p_secret_key: input.secretKey,
+        p_webhook_secret: input.webhookSecret,
+        p_is_live: input.isLive,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fincraSettings"] }),
+  });
+  return mutateAsync;
 }
 
 export function useUpdateTenant() {
