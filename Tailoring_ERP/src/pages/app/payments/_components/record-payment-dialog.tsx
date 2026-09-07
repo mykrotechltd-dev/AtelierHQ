@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useRecordPayment } from "@/lib/queries/payments.ts";
+import { useRecordPayment, useCreateStripeCheckoutSession } from "@/lib/queries/payments.ts";
+import { useMyTenant } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { CreditCard } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +61,27 @@ export default function RecordPaymentDialog({
   outstanding: number;
 }) {
   const recordPayment = useRecordPayment();
+  const createCheckoutSession = useCreateStripeCheckoutSession();
+  const tenant = useMyTenant();
   const [saving, setSaving] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+
+  const handlePayByCard = async () => {
+    const amount = parseFloat(form.getValues("amount"));
+    if (isNaN(amount) || amount <= 0) {
+      form.setError("amount", { message: "Enter a valid amount" });
+      return;
+    }
+    setRedirecting(true);
+    try {
+      const url = await createCheckoutSession({ orderId, amount });
+      window.location.href = url;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to start checkout";
+      toast.error(message);
+      setRedirecting(false);
+    }
+  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -111,6 +133,19 @@ export default function RecordPaymentDialog({
               {outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
+        )}
+
+        {tenant?.stripeOnboardingStatus === "active" && (
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            disabled={redirecting}
+            onClick={handlePayByCard}
+          >
+            <CreditCard className="size-3.5 mr-1" />
+            {redirecting ? "Redirecting to Stripe…" : "Pay by card (Stripe Checkout)"}
+          </Button>
         )}
 
         <Form {...form}>

@@ -13,6 +13,9 @@ function mapPayment(row: Record<string, unknown>): Payment {
     method: row.method as PaymentMethod,
     notes: (row.notes as string) ?? null,
     paidAt: row.paid_at as string,
+    externalReference: (row.external_reference as string) ?? null,
+    chargedCurrency: (row.charged_currency as string) ?? null,
+    chargedAmount: row.charged_amount === null || row.charged_amount === undefined ? null : Number(row.charged_amount),
   };
 }
 
@@ -130,6 +133,20 @@ export function useRecordPayment() {
     },
   });
   return mutateAsync;
+}
+
+/** Creates a Stripe Checkout Session as a direct charge on this tenant's
+ *  connected account and returns the Stripe-hosted URL to redirect to. The
+ *  resulting `payments` row is created only by the webhook on success —
+ *  never by the client, so an abandoned checkout leaves no record. */
+export function useCreateStripeCheckoutSession() {
+  return async (input: { orderId: string; amount: number }) => {
+    const { data, error } = await supabase.functions.invoke("stripe-connect/create-checkout-session", {
+      body: { orderId: input.orderId, amount: input.amount },
+    });
+    if (error) throw error;
+    return (data as { url: string }).url;
+  };
 }
 
 export function useDeletePayment() {

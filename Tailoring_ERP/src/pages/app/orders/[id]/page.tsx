@@ -8,9 +8,20 @@ import {
   useAdvanceOrderStatus,
   useDeleteOrderItem,
   useDeleteOrder,
+  useAddMaterial,
+  useUpdateMaterial,
+  useDeleteMaterial,
+  type OrderItemWithMaterials,
 } from "@/lib/queries/orders.ts";
 import { usePaymentsByOrder, useDeletePayment } from "@/lib/queries/payments.ts";
-import type { Order, OrderItem } from "@/lib/supabase/types.ts";
+import { useOrderPaymentTrail } from "@/lib/queries/workers.ts";
+import type { Order, Measurements } from "@/lib/supabase/types.ts";
+import {
+  GARMENT_TYPES,
+  MEASUREMENT_LABELS,
+  measurementSpecForGarment,
+  type MeasurementField,
+} from "@/lib/garment-types.ts";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -18,6 +29,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import RecordPaymentDialog from "../../payments/_components/record-payment-dialog.tsx";
+import PayoutDialog from "../../workers/_components/payout-dialog.tsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,8 +57,15 @@ import {
 } from "@/components/ui/form.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { StatusBadge, STATUS_CONFIG, type OrderStatus } from "../_components/status-badge.tsx";
-import { ArrowLeft, ArrowRight, Pencil, Trash2, Plus, User, CalendarDays, FileText, CreditCard, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Pencil, Trash2, Plus, User, CalendarDays, FileText, CreditCard, CheckCircle2, Banknote, AlertTriangle } from "lucide-react";
 import InvoiceActions from "../_components/invoice-actions.tsx";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -63,20 +82,37 @@ const itemSchema = z.object({
 });
 type ItemFormValues = z.infer<typeof itemSchema>;
 
+interface MaterialLine {
+  id?: string; // absent = not yet saved
+  name: string;
+  quantity: string;
+  unitPrice: string;
+}
+
 function ItemDialog({
   open,
   onClose,
   orderId,
   item,
+  customerMeasurements,
 }: {
   open: boolean;
   onClose: () => void;
   orderId: string;
-  item?: OrderItem;
+  item?: OrderItemWithMaterials;
+  customerMeasurements: Measurements | null;
 }) {
   const addItem = useAddOrderItem();
   const updateItem = useUpdateOrderItem();
+  const addMaterial = useAddMaterial();
+  const updateMaterial = useUpdateMaterial();
+  const deleteMaterial = useDeleteMaterial();
   const [saving, setSaving] = useState(false);
+  const [measurements, setMeasurements] = useState<Partial<Measurements>>(item?.measurements ?? {});
+  const [materials, setMaterials] = useState<MaterialLine[]>(
+    item?.materials.map((m) => ({ id: m.id, name: m.name, quantity: String(m.quantity), unitPrice: String(m.unitPrice) })) ?? []
+  );
+  const [removedMaterialIds, setRemovedMaterialIds] = useState<string[]>([]);
 
   const form = useForm<ItemFormValues>({
     resolver: zodResolver(itemSchema),
@@ -90,9 +126,45 @@ function ItemDialog({
     },
   });
 
+  const garmentType = form.watch("garmentType");
+  const spec = measurementSpecForGarment(garmentType);
+  const fields = spec ? [...spec.required, ...spec.optional] : [];
+
+  // Pre-fill from the customer's profile only for a brand-new item that has
+  // no measurements of its own yet — never overwrites an existing snapshot.
+  const handleGarmentTypeChange = (value: string) => {
+    form.setValue("garmentType", value);
+    if (!item && customerMeasurements) {
+      const nextSpec = measurementSpecForGarment(value);
+      if (nextSpec) {
+        const prefill: Partial<Measurements> = { ...measurements };
+        for (const f of [...nextSpec.required, ...nextSpec.optional]) {
+          if (prefill[f] === undefined && customerMeasurements[f] !== undefined) {
+            prefill[f] = customerMeasurements[f];
+          }
+        }
+        setMeasurements(prefill);
+      }
+    }
+  };
+
+  const missingRequired = spec?.required.filter((f) => measurements[f] === undefined) ?? [];
+
+  const addMaterialLine = () => setMaterials((prev) => [...prev, { name: "", quantity: "1", unitPrice: "" }]);
+  const updateMaterialLine = (index: number, patch: Partial<MaterialLine>) =>
+    setMaterials((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)));
+  const removeMaterialLine = (index: number) => {
+    const line = materials[index];
+    if (line.id) setRemovedMaterialIds((prev) => [...prev, line.id!]);
+    setMaterials((prev) => prev.filter((_, i) => i !== index));
+  };
+  const materialLineTotal = (m: MaterialLine) => (parseFloat(m.quantity) || 0) * (parseFloat(m.unitPrice) || 0);
+  const materialsSubtotal = materials.reduce((sum, m) => sum + materialLineTotal(m), 0);
+
   const onSubmit = async (values: ItemFormValues) => {
     setSaving(true);
     try {
+      const measurementsPayload = Object.keys(measurements).length > 0 ? (measurements as Measurements) : undefined;
       const payload = {
         description: values.description,
         garmentType: values.garmentType || undefined,
@@ -100,14 +172,36 @@ function ItemDialog({
         quantity: parseFloat(values.quantity),
         unitPrice: parseFloat(values.unitPrice),
         notes: values.notes || undefined,
+        measurements: measurementsPayload,
       };
+
+      let itemId: string;
       if (item) {
         await updateItem({ id: item.id, ...payload });
+        itemId = item.id;
         toast.success("Item updated");
       } else {
-        await addItem({ orderId, ...payload });
+        itemId = await addItem({ orderId, ...payload });
         toast.success("Item added");
       }
+
+      for (const removedId of removedMaterialIds) {
+        await deleteMaterial({ id: removedId, orderId });
+      }
+      for (const line of materials) {
+        if (!line.name.trim()) continue;
+        const materialPayload = {
+          name: line.name,
+          quantity: parseFloat(line.quantity) || 0,
+          unitPrice: parseFloat(line.unitPrice) || 0,
+        };
+        if (line.id) {
+          await updateMaterial({ id: line.id, orderId, ...materialPayload });
+        } else {
+          await addMaterial({ orderId, orderItemId: itemId, ...materialPayload });
+        }
+      }
+
       form.reset();
       onClose();
     } catch {
@@ -119,7 +213,7 @@ function ItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-sans">{item ? "Edit item" : "Add item"}</DialogTitle>
         </DialogHeader>
@@ -136,7 +230,18 @@ function ItemDialog({
               <FormField control={form.control} name="garmentType" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs">Garment type</FormLabel>
-                  <FormControl><Input placeholder="Suit, Dress…" {...field} /></FormControl>
+                  <Select onValueChange={handleGarmentTypeChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {GARMENT_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )} />
               <FormField control={form.control} name="fabric" render={({ field }) => (
@@ -166,6 +271,94 @@ function ItemDialog({
                 <FormControl><Input placeholder="Special instructions…" {...field} /></FormControl>
               </FormItem>
             )} />
+
+            {/* Measurements — frozen snapshot for this garment */}
+            {fields.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <p className="text-xs font-body font-medium text-muted-foreground uppercase tracking-wide">
+                  Measurements ({item ? "saved with this item" : "from customer profile — editable"})
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {fields.map((f) => (
+                    <div key={f}>
+                      <label className="text-xs font-body text-muted-foreground">
+                        {MEASUREMENT_LABELS[f]}
+                        {spec?.required.includes(f) ? " *" : ""}
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        placeholder="—"
+                        value={measurements[f]?.toString() ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setMeasurements((prev) => ({
+                            ...prev,
+                            [f]: v === "" ? undefined : parseFloat(v),
+                          }));
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {missingRequired.length > 0 && (
+                  <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-body">
+                    <AlertTriangle className="size-3.5" />
+                    Missing: {missingRequired.map((f) => MEASUREMENT_LABELS[f]).join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Bill of materials */}
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-body font-medium text-muted-foreground uppercase tracking-wide">
+                  Materials
+                </p>
+                <Button type="button" size="sm" variant="secondary" onClick={addMaterialLine}>
+                  <Plus className="size-3 mr-1" /> Add material
+                </Button>
+              </div>
+              {materials.length === 0 ? (
+                <p className="text-xs text-muted-foreground font-body">No materials added.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {materials.map((m, i) => (
+                    <div key={m.id ?? `new-${i}`} className="grid grid-cols-[1fr_60px_80px_auto] gap-1.5 items-center">
+                      <Input
+                        placeholder="Buttons, lining…"
+                        value={m.name}
+                        onChange={(e) => updateMaterialLine(i, { name: e.target.value })}
+                      />
+                      <Input
+                        type="number" min="0" step="0.01" placeholder="Qty"
+                        value={m.quantity}
+                        onChange={(e) => updateMaterialLine(i, { quantity: e.target.value })}
+                      />
+                      <Input
+                        type="number" min="0" step="0.01" placeholder="Price"
+                        value={m.unitPrice}
+                        onChange={(e) => updateMaterialLine(i, { unitPrice: e.target.value })}
+                      />
+                      <button type="button" onClick={() => removeMaterialLine(i)} className="text-destructive hover:text-destructive/80 cursor-pointer justify-self-center">
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex justify-end pt-1">
+                    <span className="text-xs font-body text-muted-foreground">
+                      Materials subtotal:{" "}
+                      <span className="font-medium text-foreground">
+                        {materialsSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
               <Button type="submit" disabled={saving}>{saving ? "Saving…" : item ? "Save changes" : "Add item"}</Button>
@@ -244,9 +437,10 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<OrderItem | undefined>(undefined);
+  const [editingItem, setEditingItem] = useState<OrderItemWithMaterials | undefined>(undefined);
   const [editOrderOpen, setEditOrderOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
 
   const advanceStatus = useAdvanceOrderStatus();
   const deleteItem = useDeleteOrderItem();
@@ -255,6 +449,7 @@ export default function OrderDetailPage() {
   const order = useOrder(id);
   const paymentSummary = usePaymentsByOrder(id);
   const deletePayment = useDeletePayment();
+  const paymentTrail = useOrderPaymentTrail(id);
 
   const handleAdvance = async () => {
     if (!id) return;
@@ -413,6 +608,11 @@ export default function OrderDetailPage() {
                     <span className="text-xs text-muted-foreground font-body">
                       Qty: {item.quantity} × {item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
+                    {item.materialCostTotal > 0 && (
+                      <span className="text-xs text-muted-foreground font-body">
+                        Materials: {item.materialCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
                   </div>
                   {item.notes && (
                     <p className="text-xs text-muted-foreground font-body mt-0.5 italic">{item.notes}</p>
@@ -467,6 +667,81 @@ export default function OrderDetailPage() {
                 </p>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Job Costing — internal margin, never shown to or derived from the customer balance */}
+      <Card className="mt-4">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-sans text-sm text-muted-foreground uppercase tracking-wide">
+              Job Costing
+            </CardTitle>
+            <Button size="sm" variant="secondary" onClick={() => setPayoutDialogOpen(true)}>
+              <Banknote className="size-3.5 mr-1" /> Record worker payment
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {paymentTrail === undefined ? (
+            <Skeleton className="h-16 w-full" />
+          ) : (
+            (() => {
+              const jobCostTotal = paymentTrail.reduce((sum, p) => sum + p.amount, 0);
+              const materialCostTotal = order.materialCostTotal;
+              const jobMargin = order.totalAmount - jobCostTotal - materialCostTotal;
+              return (
+                <>
+                  <div className="flex flex-wrap gap-4 rounded-md bg-muted px-4 py-3">
+                    <div>
+                      <p className="text-xs font-body text-muted-foreground">Job cost (worker payments)</p>
+                      <p className="font-sans font-semibold text-sm">
+                        {jobCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-body text-muted-foreground">Material cost</p>
+                      <p className="font-sans font-semibold text-sm">
+                        {materialCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-body text-muted-foreground">Job margin</p>
+                      <p className={`font-sans font-semibold text-sm ${jobMargin < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {jobMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Payment trail */}
+                  {paymentTrail.length === 0 ? (
+                    <p className="text-sm text-muted-foreground font-body">No worker payments recorded against this order yet.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {paymentTrail.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-body text-muted-foreground">
+                              {format(parseISO(p.paidAt), "dd MMM yyyy")}
+                            </span>
+                            <span className="text-xs font-body font-medium">{p.workerName}</span>
+                            {p.notes && (
+                              <span className="text-xs font-body text-muted-foreground italic truncate max-w-[180px]">
+                                {p.notes}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-sans font-semibold text-sm">
+                            {p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()
           )}
         </CardContent>
       </Card>
@@ -598,6 +873,7 @@ export default function OrderDetailPage() {
         onClose={() => { setItemDialogOpen(false); setEditingItem(undefined); }}
         orderId={id as string}
         item={editingItem}
+        customerMeasurements={order.customer?.measurements ?? null}
       />
       <EditOrderDialog
         open={editOrderOpen}
@@ -611,6 +887,13 @@ export default function OrderDetailPage() {
           orderId={id as string}
           orderNumber={order.orderNumber}
           outstanding={paymentSummary.outstanding}
+        />
+      )}
+      {payoutDialogOpen && (
+        <PayoutDialog
+          open={payoutDialogOpen}
+          onClose={() => setPayoutDialogOpen(false)}
+          preselectedOrderId={id as string}
         />
       )}
     </div>

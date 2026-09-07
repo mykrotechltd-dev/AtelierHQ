@@ -5,8 +5,9 @@
 
 export type OrderStatus = "received" | "in_progress" | "completed" | "delivered";
 export type TaskStatus = "pending" | "in_progress" | "done";
-export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other";
+export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other" | "stripe";
 export type UserRole = "owner" | "worker";
+export type StripeOnboardingStatus = "not_started" | "pending" | "active" | "restricted";
 
 export interface Measurements {
   chest?: number;
@@ -33,6 +34,10 @@ export interface Database {
           address: string | null;
           currency: string;
           owner_id: string | null;
+          stripe_connect_account_id: string | null;
+          stripe_onboarding_status: StripeOnboardingStatus;
+          stripe_country: string | null;
+          stripe_default_currency: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -107,6 +112,7 @@ export interface Database {
           quantity: number;
           unit_price: number;
           notes: string | null;
+          measurements: Measurements | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["order_items"]["Row"]> & {
@@ -115,6 +121,24 @@ export interface Database {
           description: string;
         };
         Update: Partial<Database["public"]["Tables"]["order_items"]["Row"]>;
+      };
+      order_materials: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          order_item_id: string;
+          name: string;
+          quantity: number;
+          unit_price: number;
+          line_total: number;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["order_materials"]["Row"]> & {
+          tenant_id: string;
+          order_item_id: string;
+          name: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["order_materials"]["Row"]>;
       };
       tasks: {
         Row: {
@@ -149,6 +173,9 @@ export interface Database {
           method: PaymentMethod;
           notes: string | null;
           paid_at: string;
+          external_reference: string | null;
+          charged_currency: string | null;
+          charged_amount: number | null;
         };
         Insert: Partial<Database["public"]["Tables"]["payments"]["Row"]> & {
           tenant_id: string;
@@ -163,6 +190,7 @@ export interface Database {
           id: string;
           tenant_id: string;
           worker_id: string;
+          order_id: string | null;
           amount: number;
           notes: string | null;
           paid_at: string;
@@ -187,6 +215,10 @@ export interface Tenant {
   address: string | null;
   currency: string;
   role?: UserRole;
+  stripeConnectAccountId: string | null;
+  stripeOnboardingStatus: StripeOnboardingStatus;
+  stripeCountry: string | null;
+  stripeDefaultCurrency: string | null;
 }
 
 export interface Customer {
@@ -230,6 +262,19 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   notes: string | null;
+  /** Frozen snapshot of the customer's measurements at the time this garment
+   *  was added — never re-synced from customers.measurements afterward. */
+  measurements: Measurements | null;
+}
+
+export interface OrderMaterial {
+  id: string;
+  tenantId: string;
+  orderItemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
 }
 
 export interface Task {
@@ -254,12 +299,16 @@ export interface Payment {
   method: PaymentMethod;
   notes: string | null;
   paidAt: string;
+  externalReference: string | null;
+  chargedCurrency: string | null;
+  chargedAmount: number | null;
 }
 
 export interface WorkerPayout {
   id: string;
   tenantId: string;
   workerId: string;
+  orderId: string | null;
   amount: number;
   notes: string | null;
   paidAt: string;

@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useMyTenant, useUpdateTenant } from "@/lib/queries/tenants.ts";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useMyTenant, useUpdateTenant, useConnectStripe, useRefreshStripeStatus } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { CreditCard, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 
 const CURRENCIES = [
   "USD","NGN","GBP","EUR","GHS","KES","ZAR","INR","CAD","AUD",
@@ -40,7 +42,35 @@ type FormValues = z.infer<typeof schema>;
 export default function SettingsPage() {
   const tenant = useMyTenant();
   const updateTenant = useUpdateTenant();
+  const connectStripe = useConnectStripe();
+  const refreshStripeStatus = useRefreshStripeStatus();
   const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Returning from Stripe's hosted onboarding — re-sync the live status.
+  useEffect(() => {
+    if (searchParams.get("stripe") === "return") {
+      refreshStripeStatus()
+        .catch(() => toast.error("Could not refresh Stripe status"))
+        .finally(() => {
+          searchParams.delete("stripe");
+          setSearchParams(searchParams, { replace: true });
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleConnectStripe = async () => {
+    setConnecting(true);
+    try {
+      const url = await connectStripe();
+      window.location.href = url;
+    } catch {
+      toast.error("Could not start Stripe onboarding");
+      setConnecting(false);
+    }
+  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -136,6 +166,58 @@ export default function SettingsPage() {
                 </Button>
               </form>
             </Form>
+          </CardContent>
+        </Card>
+      )}
+
+      {tenant !== undefined && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="font-sans text-lg flex items-center gap-2">
+              <CreditCard className="size-4" /> Stripe Payments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {tenant?.stripeOnboardingStatus === "active" ? (
+              <>
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="size-4" />
+                  <span className="text-sm font-body font-medium">Connected and accepting card payments</span>
+                </div>
+                <p className="text-xs text-muted-foreground font-body">
+                  Account country: {tenant.stripeCountry ?? "—"} · Currency: {tenant.stripeDefaultCurrency ?? "—"}
+                </p>
+              </>
+            ) : tenant?.stripeOnboardingStatus === "pending" ? (
+              <>
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <Clock className="size-4" />
+                  <span className="text-sm font-body font-medium">Onboarding in progress with Stripe</span>
+                </div>
+                <Button size="sm" variant="secondary" disabled={connecting} onClick={handleConnectStripe}>
+                  {connecting ? "Redirecting…" : "Continue onboarding"}
+                </Button>
+              </>
+            ) : tenant?.stripeOnboardingStatus === "restricted" ? (
+              <>
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="size-4" />
+                  <span className="text-sm font-body font-medium">Stripe has restricted this account — more information is needed</span>
+                </div>
+                <Button size="sm" variant="secondary" disabled={connecting} onClick={handleConnectStripe}>
+                  {connecting ? "Redirecting…" : "Resolve on Stripe"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground font-body">
+                  Connect a Stripe account to accept card payments from customers, directly into your own bank account.
+                </p>
+                <Button size="sm" disabled={connecting} onClick={handleConnectStripe}>
+                  {connecting ? "Redirecting…" : "Connect with Stripe"}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

@@ -31,7 +31,13 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import {
+  GARMENT_TYPES,
+  MEASUREMENT_LABELS,
+  measurementSpecForGarment,
+} from "@/lib/garment-types.ts";
+import type { Measurements } from "@/lib/supabase/types.ts";
 
 const itemSchema = z.object({
   description: z.string().min(1, "Description required"),
@@ -80,12 +86,36 @@ export default function CreateOrderDialog({
     name: "items",
   });
 
+  // Per-item measurement snapshot, parallel to the items field array.
+  const [itemMeasurements, setItemMeasurements] = useState<Partial<Measurements>[]>([{}]);
+
   const watchItems = form.watch("items");
+  const watchCustomerId = form.watch("customerId");
+  const selectedCustomer = customers.find((c) => c.id === watchCustomerId);
+
   const total = watchItems.reduce((sum, item) => {
     const qty = parseFloat(item.quantity) || 0;
     const price = parseFloat(item.unitPrice) || 0;
     return sum + qty * price;
   }, 0);
+
+  const handleGarmentTypeChange = (index: number, value: string) => {
+    form.setValue(`items.${index}.garmentType`, value);
+    const spec = measurementSpecForGarment(value);
+    if (spec && selectedCustomer?.measurements) {
+      setItemMeasurements((prev) => {
+        const next = [...prev];
+        const current = { ...(next[index] ?? {}) };
+        for (const f of [...spec.required, ...spec.optional]) {
+          if (current[f] === undefined && selectedCustomer.measurements![f] !== undefined) {
+            current[f] = selectedCustomer.measurements![f];
+          }
+        }
+        next[index] = current;
+        return next;
+      });
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     setSaving(true);
@@ -94,13 +124,15 @@ export default function CreateOrderDialog({
         customerId: values.customerId,
         dueDate: values.dueDate || undefined,
         notes: values.notes || undefined,
-        items: values.items.map((i) => ({
+        items: values.items.map((i, idx) => ({
           description: i.description,
           garmentType: i.garmentType || undefined,
           fabric: i.fabric || undefined,
           quantity: parseFloat(i.quantity),
           unitPrice: parseFloat(i.unitPrice),
           notes: i.notes || undefined,
+          measurements:
+            Object.keys(itemMeasurements[idx] ?? {}).length > 0 ? (itemMeasurements[idx] as Measurements) : undefined,
         })),
       });
       toast.success("Order created");
@@ -188,7 +220,7 @@ export default function CreateOrderDialog({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() =>
+                  onClick={() => {
                     append({
                       description: "",
                       garmentType: "",
@@ -196,8 +228,9 @@ export default function CreateOrderDialog({
                       quantity: "1",
                       unitPrice: "",
                       notes: "",
-                    })
-                  }
+                    });
+                    setItemMeasurements((prev) => [...prev, {}]);
+                  }}
                 >
                   <Plus className="size-3.5 mr-1" /> Add item
                 </Button>
@@ -213,7 +246,10 @@ export default function CreateOrderDialog({
                       {fields.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => remove(index)}
+                          onClick={() => {
+                            remove(index);
+                            setItemMeasurements((prev) => prev.filter((_, i) => i !== index));
+                          }}
                           className="text-destructive hover:text-destructive/80 cursor-pointer"
                         >
                           <Trash2 className="size-4" />
@@ -242,9 +278,18 @@ export default function CreateOrderDialog({
                         render={({ field: f }) => (
                           <FormItem>
                             <FormLabel className="text-xs">Garment type</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. Suit, Dress" {...f} />
-                            </FormControl>
+                            <Select onValueChange={(v) => handleGarmentTypeChange(index, v)} value={f.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {GARMENT_TYPES.map((t) => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </FormItem>
                         )}
                       />
@@ -300,6 +345,52 @@ export default function CreateOrderDialog({
                         </FormItem>
                       )}
                     />
+
+                    {(() => {
+                      const spec = measurementSpecForGarment(watchItems[index]?.garmentType);
+                      if (!spec) return null;
+                      const fieldsForType = [...spec.required, ...spec.optional];
+                      const values = itemMeasurements[index] ?? {};
+                      const missing = spec.required.filter((f) => values[f] === undefined);
+                      return (
+                        <div className="space-y-2 rounded-md border border-border p-3">
+                          <p className="text-xs font-body font-medium text-muted-foreground uppercase tracking-wide">
+                            Measurements {selectedCustomer ? "(from customer profile — editable)" : ""}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {fieldsForType.map((f) => (
+                              <div key={f}>
+                                <label className="text-xs font-body text-muted-foreground">
+                                  {MEASUREMENT_LABELS[f]}
+                                  {spec.required.includes(f) ? " *" : ""}
+                                </label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.1"
+                                  placeholder="—"
+                                  value={values[f]?.toString() ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setItemMeasurements((prev) => {
+                                      const next = [...prev];
+                                      next[index] = { ...(next[index] ?? {}), [f]: v === "" ? undefined : parseFloat(v) };
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          {missing.length > 0 && (
+                            <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-body">
+                              <AlertTriangle className="size-3.5" />
+                              Missing: {missing.map((f) => MEASUREMENT_LABELS[f]).join(", ")}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

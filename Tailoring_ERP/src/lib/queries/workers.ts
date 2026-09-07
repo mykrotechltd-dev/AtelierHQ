@@ -35,6 +35,7 @@ function mapPayout(row: Record<string, unknown>): WorkerPayout {
     id: row.id as string,
     tenantId: row.tenant_id as string,
     workerId: row.worker_id as string,
+    orderId: (row.order_id as string) ?? null,
     amount: Number(row.amount),
     notes: (row.notes as string) ?? null,
     paidAt: row.paid_at as string,
@@ -225,20 +226,46 @@ export function usePayouts(workerId: string | undefined, pageSize = 20) {
 export function useRecordPayout() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { workerId: string; amount: number; notes?: string }) => {
-      const { error } = await supabase.from("worker_payouts").insert({
-        worker_id: input.workerId,
-        amount: input.amount,
-        notes: input.notes ?? null,
+    mutationFn: async (input: { orderId: string; workerId: string; amount: number; notes?: string; paidAt?: string }) => {
+      const { error } = await supabase.rpc("record_worker_payment", {
+        p_order_id: input.orderId,
+        p_worker_id: input.workerId,
+        p_amount: input.amount,
+        p_notes: input.notes ?? null,
+        p_paid_at: input.paidAt ?? null,
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["payouts"] });
       qc.invalidateQueries({ queryKey: ["workerPerformance"] });
+      qc.invalidateQueries({ queryKey: ["order", v.orderId] });
+      qc.invalidateQueries({ queryKey: ["orderPaymentTrail", v.orderId] });
     },
   });
   return mutateAsync;
+}
+
+// every worker payment recorded against a given order, newest first —
+// the per-order "Payment Trail" view for job costing
+export function useOrderPaymentTrail(orderId: string | undefined) {
+  const query = useQuery({
+    queryKey: ["orderPaymentTrail", orderId ?? ""],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("worker_payouts")
+        .select("*, workers(name)")
+        .eq("order_id", orderId!)
+        .order("paid_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...mapPayout(row),
+        workerName: (row.workers as unknown as { name: string } | null)?.name ?? "Unknown",
+      }));
+    },
+    enabled: !!orderId,
+  });
+  return query.isLoading ? undefined : (query.data ?? []);
 }
 
 export function useDeletePayout() {

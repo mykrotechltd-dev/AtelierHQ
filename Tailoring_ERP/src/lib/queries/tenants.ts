@@ -11,6 +11,10 @@ function mapTenant(row: Record<string, unknown>, role?: UserRole): Tenant {
     address: (row.address as string) ?? null,
     currency: row.currency as string,
     role,
+    stripeConnectAccountId: (row.stripe_connect_account_id as string) ?? null,
+    stripeOnboardingStatus: (row.stripe_onboarding_status as Tenant["stripeOnboardingStatus"]) ?? "not_started",
+    stripeCountry: (row.stripe_country as string) ?? null,
+    stripeDefaultCurrency: (row.stripe_default_currency as string) ?? null,
   };
 }
 
@@ -55,6 +59,32 @@ export function useCreateTenant() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tenant"] }),
   });
   return mutateAsync;
+}
+
+// ── Stripe Connect ────────────────────────────────────────────────────────────
+// All three routes live in the single `stripe-connect` edge function — see
+// supabase/functions/stripe-connect. The platform's Stripe secret key never
+// leaves that function; the client only ever gets back a URL or a status.
+
+/** Starts (or resumes) this tenant's Stripe Express onboarding — returns the
+ *  Stripe-hosted URL to redirect the browser to. */
+export function useConnectStripe() {
+  return async () => {
+    const { data, error } = await supabase.functions.invoke("stripe-connect/create-account-link");
+    if (error) throw error;
+    return (data as { url: string }).url;
+  };
+}
+
+/** Re-syncs stripeOnboardingStatus/country/currency from the live Stripe
+ *  Account object — call this when the user returns from Stripe onboarding. */
+export function useRefreshStripeStatus() {
+  const qc = useQueryClient();
+  return async () => {
+    const { error } = await supabase.functions.invoke("stripe-connect/account-status");
+    if (error) throw error;
+    await qc.invalidateQueries({ queryKey: ["tenant"] });
+  };
 }
 
 export function useUpdateTenant() {

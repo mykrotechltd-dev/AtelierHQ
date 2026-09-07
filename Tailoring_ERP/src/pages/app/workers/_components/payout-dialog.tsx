@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRecordPayout, useWorkers } from "@/lib/queries/workers.ts";
+import { useOrders } from "@/lib/queries/orders.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -31,6 +32,7 @@ import {
 
 const schema = z.object({
   workerId: z.string().min(1, "Select a worker"),
+  orderId: z.string().min(1, "Select an order"),
   amount: z.string().min(1, "Amount required"),
   notes: z.string().optional(),
 });
@@ -40,19 +42,23 @@ export default function PayoutDialog({
   open,
   onClose,
   preselectedWorkerId,
+  preselectedOrderId,
 }: {
   open: boolean;
   onClose: () => void;
   preselectedWorkerId?: string;
+  preselectedOrderId?: string;
 }) {
   const recordPayout = useRecordPayout();
   const workers = useWorkers();
+  const { results: orders } = useOrders(undefined, 100);
   const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       workerId: preselectedWorkerId ?? "",
+      orderId: preselectedOrderId ?? "",
       amount: "",
       notes: "",
     },
@@ -62,6 +68,7 @@ export default function PayoutDialog({
     setSaving(true);
     try {
       await recordPayout({
+        orderId: values.orderId,
         workerId: values.workerId,
         amount: parseFloat(values.amount),
         notes: values.notes || undefined,
@@ -84,6 +91,30 @@ export default function PayoutDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="orderId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Order *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select order" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {orders.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.orderNumber} — {o.customerName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="workerId"

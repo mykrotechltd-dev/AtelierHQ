@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
-import type { Customer, Order, OrderItem, OrderStatus } from "../supabase/types.ts";
+import type { Customer, Measurements, Order, OrderItem, OrderMaterial, OrderStatus } from "../supabase/types.ts";
 import { usePaginatedQuery } from "./pagination.ts";
 
 function mapOrder(row: Record<string, unknown>): Order {
@@ -27,6 +27,19 @@ function mapOrderItem(row: Record<string, unknown>): OrderItem {
     quantity: Number(row.quantity),
     unitPrice: Number(row.unit_price),
     notes: (row.notes as string) ?? null,
+    measurements: (row.measurements as Measurements) ?? null,
+  };
+}
+
+function mapOrderMaterial(row: Record<string, unknown>): OrderMaterial {
+  return {
+    id: row.id as string,
+    tenantId: row.tenant_id as string,
+    orderItemId: row.order_item_id as string,
+    name: row.name as string,
+    quantity: Number(row.quantity),
+    unitPrice: Number(row.unit_price),
+    lineTotal: Number(row.line_total),
   };
 }
 
@@ -49,9 +62,14 @@ export function useOrders(status: OrderStatus | undefined, pageSize = 20) {
   );
 }
 
+export type OrderItemWithMaterials = OrderItem & {
+  materials: OrderMaterial[];
+  materialCostTotal: number;
+};
+
 export function useOrder(
   id: string | undefined
-): (Order & { customer: Customer | null; items: OrderItem[] }) | null | undefined {
+): (Order & { customer: Customer | null; items: OrderItemWithMaterials[]; materialCostTotal: number }) | null | undefined {
   const query = useQuery({
     queryKey: ["order", id],
     queryFn: async () => {
@@ -68,6 +86,29 @@ export function useOrder(
         .eq("order_id", id!);
       if (itemsError) throw itemsError;
 
+      const itemIds = (itemRows ?? []).map((r) => r.id as string);
+      const { data: materialRows, error: materialsError } = itemIds.length
+        ? await supabase.from("order_materials").select("*").in("order_item_id", itemIds)
+        : { data: [], error: null };
+      if (materialsError) throw materialsError;
+
+      const materialsByItem = new Map<string, OrderMaterial[]>();
+      for (const row of materialRows ?? []) {
+        const material = mapOrderMaterial(row);
+        const list = materialsByItem.get(material.orderItemId) ?? [];
+        list.push(material);
+        materialsByItem.set(material.orderItemId, list);
+      }
+
+      const items: OrderItemWithMaterials[] = (itemRows ?? []).map((row) => {
+        const materials = materialsByItem.get(row.id as string) ?? [];
+        return {
+          ...mapOrderItem(row),
+          materials,
+          materialCostTotal: materials.reduce((sum, m) => sum + m.lineTotal, 0),
+        };
+      });
+
       const customerRow = orderRow.customers as unknown as Record<string, unknown> | null;
       return {
         ...mapOrder(orderRow),
@@ -82,7 +123,8 @@ export function useOrder(
               measurements: customerRow.measurements as Customer["measurements"],
             }
           : null,
-        items: (itemRows ?? []).map(mapOrderItem),
+        items,
+        materialCostTotal: items.reduce((sum, item) => sum + item.materialCostTotal, 0),
       };
     },
     enabled: !!id,
@@ -98,7 +140,15 @@ export function useCreateOrder() {
       customerId: string;
       dueDate?: string;
       notes?: string;
-      items: { description: string; garmentType?: string; fabric?: string; quantity: number; unitPrice: number; notes?: string }[];
+      items: {
+        description: string;
+        garmentType?: string;
+        fabric?: string;
+        quantity: number;
+        unitPrice: number;
+        notes?: string;
+        measurements?: Measurements;
+      }[];
     }) => {
       const { data, error } = await supabase.rpc("create_order_with_items", {
         p_customer_id: input.customerId,
@@ -171,17 +221,24 @@ export function useAddOrderItem() {
       quantity: number;
       unitPrice: number;
       notes?: string;
+      measurements?: Measurements;
     }) => {
-      const { error } = await supabase.from("order_items").insert({
-        order_id: input.orderId,
-        description: input.description,
-        garment_type: input.garmentType ?? null,
-        fabric: input.fabric ?? null,
-        quantity: input.quantity,
-        unit_price: input.unitPrice,
-        notes: input.notes ?? null,
-      });
+      const { data, error } = await supabase
+        .from("order_items")
+        .insert({
+          order_id: input.orderId,
+          description: input.description,
+          garment_type: input.garmentType ?? null,
+          fabric: input.fabric ?? null,
+          quantity: input.quantity,
+          unit_price: input.unitPrice,
+          notes: input.notes ?? null,
+          measurements: input.measurements ?? null,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+      return data.id as string;
     },
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["order", v.orderId] });
@@ -202,14 +259,16 @@ export function useUpdateOrderItem() {
       quantity?: number;
       unitPrice?: number;
       notes?: string;
+      measurements?: Measurements;
     }) => {
-      const { id, garmentType, unitPrice, ...rest } = input;
+      const { id, garmentType, unitPrice, measurements, ...rest } = input;
       const { data, error } = await supabase
         .from("order_items")
         .update({
           ...rest,
           ...(garmentType !== undefined ? { garment_type: garmentType } : {}),
           ...(unitPrice !== undefined ? { unit_price: unitPrice } : {}),
+          ...(measurements !== undefined ? { measurements } : {}),
         })
         .eq("id", id)
         .select("order_id")
@@ -221,6 +280,66 @@ export function useUpdateOrderItem() {
       qc.invalidateQueries({ queryKey: ["order", orderId] });
       qc.invalidateQueries({ queryKey: ["orders"] });
     },
+  });
+  return mutateAsync;
+}
+
+export function useAddMaterial() {
+  const qc = useQueryClient();
+  const { mutateAsync } = useMutation({
+    mutationFn: async (input: {
+      orderId: string;
+      orderItemId: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+    }) => {
+      const { error } = await supabase.from("order_materials").insert({
+        order_item_id: input.orderItemId,
+        name: input.name,
+        quantity: input.quantity,
+        unit_price: input.unitPrice,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
+  });
+  return mutateAsync;
+}
+
+export function useUpdateMaterial() {
+  const qc = useQueryClient();
+  const { mutateAsync } = useMutation({
+    mutationFn: async (input: {
+      id: string;
+      orderId: string;
+      name?: string;
+      quantity?: number;
+      unitPrice?: number;
+    }) => {
+      const { id, orderId: _orderId, unitPrice, ...rest } = input;
+      const { error } = await supabase
+        .from("order_materials")
+        .update({
+          ...rest,
+          ...(unitPrice !== undefined ? { unit_price: unitPrice } : {}),
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
+  });
+  return mutateAsync;
+}
+
+export function useDeleteMaterial() {
+  const qc = useQueryClient();
+  const { mutateAsync } = useMutation({
+    mutationFn: async (input: { id: string; orderId: string }) => {
+      const { error } = await supabase.from("order_materials").delete().eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
   });
   return mutateAsync;
 }

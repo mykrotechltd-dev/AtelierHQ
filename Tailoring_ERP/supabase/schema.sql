@@ -13,7 +13,7 @@ create extension if not exists "pgcrypto";
 create type user_role      as enum ('owner', 'worker');
 create type order_status   as enum ('received', 'in_progress', 'completed', 'delivered');
 create type task_status    as enum ('pending', 'in_progress', 'done');
-create type payment_method as enum ('cash', 'bank_transfer', 'card', 'other');
+create type payment_method as enum ('cash', 'bank_transfer', 'card', 'other', 'stripe');
 
 -- ----------------------------------------------------------------------------
 -- TENANTS  (one row per tailoring business)
@@ -25,6 +25,14 @@ create table tenants (
   address     text,
   currency    text not null default 'USD',
   owner_id    uuid,                      -- set after the owner profile is created
+  -- Stripe Connect: a client-safe cache of what Stripe reports for this
+  -- tenant's connected account. No secrets here — see the stripe-connect
+  -- edge function, which alone holds the platform's Stripe secret key.
+  stripe_connect_account_id text,
+  stripe_onboarding_status  text not null default 'not_started'
+    check (stripe_onboarding_status in ('not_started', 'pending', 'active', 'restricted')),
+  stripe_country            text,
+  stripe_default_currency   text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -133,10 +141,27 @@ create table order_items (
   quantity      numeric(12,2) not null default 1,
   unit_price    numeric(12,2) not null default 0,
   notes         text,
+  measurements  jsonb,   -- frozen per-garment measurement snapshot, never re-synced from customers.measurements
   created_at    timestamptz not null default now()
 );
 create index order_items_order_idx on order_items(order_id);
 create index order_items_tenant_idx on order_items(tenant_id);
+
+-- ----------------------------------------------------------------------------
+-- ORDER MATERIALS  (bill of materials, per garment/order item)
+-- ----------------------------------------------------------------------------
+create table order_materials (
+  id             uuid primary key default gen_random_uuid(),
+  tenant_id      uuid not null default current_tenant_id() references tenants(id) on delete cascade,
+  order_item_id  uuid not null references order_items(id) on delete cascade,
+  name           text not null,
+  quantity       numeric(12,2) not null default 1,
+  unit_price     numeric(12,2) not null default 0,
+  line_total     numeric(12,2) generated always as (quantity * unit_price) stored,
+  created_at     timestamptz not null default now()
+);
+create index order_materials_tenant_idx on order_materials(tenant_id);
+create index order_materials_item_idx on order_materials(order_item_id);
 
 -- ----------------------------------------------------------------------------
 -- TASKS
@@ -171,7 +196,11 @@ create table payments (
   amount        numeric(12,2) not null check (amount > 0),
   method        payment_method not null default 'cash',
   notes         text,
-  paid_at       timestamptz not null default now()
+  paid_at       timestamptz not null default now(),
+  -- set only for Stripe payments, by the stripe-connect edge function's webhook
+  external_reference text,
+  charged_currency   text,
+  charged_amount     numeric(12,2)
 );
 create index payments_tenant_idx on payments(tenant_id);
 create index payments_order_idx on payments(order_id);
@@ -184,12 +213,14 @@ create table worker_payouts (
   id          uuid primary key default gen_random_uuid(),
   tenant_id   uuid not null default current_tenant_id() references tenants(id) on delete cascade,
   worker_id   uuid not null references workers(id),
+  order_id    uuid references orders(id),   -- nullable: payouts predating job costing have no order
   amount      numeric(12,2) not null check (amount > 0),
   notes       text,
   paid_at     timestamptz not null default now()
 );
 create index worker_payouts_tenant_idx on worker_payouts(tenant_id);
 create index worker_payouts_worker_idx on worker_payouts(worker_id);
+create index worker_payouts_order_idx on worker_payouts(order_id);
 
 -- ============================================================================
 -- TRIGGERS
@@ -346,7 +377,7 @@ begin
   returning id into v_order_id;
 
   for v_item in select * from jsonb_array_elements(p_items) loop
-    insert into order_items (tenant_id, order_id, description, garment_type, fabric, quantity, unit_price, notes)
+    insert into order_items (tenant_id, order_id, description, garment_type, fabric, quantity, unit_price, notes, measurements)
     values (
       v_tenant_id,
       v_order_id,
@@ -355,7 +386,8 @@ begin
       nullif(v_item->>'fabric', ''),
       coalesce((v_item->>'quantity')::numeric, 1),
       coalesce((v_item->>'unitPrice')::numeric, 0),
-      nullif(v_item->>'notes', '')
+      nullif(v_item->>'notes', ''),
+      v_item->'measurements'
     );
   end loop;
 
@@ -434,6 +466,44 @@ begin
   returning id into v_payment_id;
 
   return v_payment_id;
+end;
+$$;
+
+-- records a worker payment against an order (job costing), enforcing the
+-- order reference server-side rather than only in the UI
+create or replace function record_worker_payment(
+  p_order_id uuid,
+  p_worker_id uuid,
+  p_amount numeric,
+  p_notes text,
+  p_paid_at timestamptz
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid := current_tenant_id();
+  v_payout_id uuid;
+begin
+  if p_amount <= 0 then
+    raise exception 'Amount must be greater than 0';
+  end if;
+
+  if not exists (select 1 from orders where id = p_order_id and tenant_id = v_tenant_id) then
+    raise exception 'Order not found';
+  end if;
+
+  if not exists (select 1 from workers where id = p_worker_id and tenant_id = v_tenant_id) then
+    raise exception 'Worker not found';
+  end if;
+
+  insert into worker_payouts (tenant_id, worker_id, order_id, amount, notes, paid_at)
+  values (v_tenant_id, p_worker_id, p_order_id, p_amount, p_notes, coalesce(p_paid_at, now()))
+  returning id into v_payout_id;
+
+  return v_payout_id;
 end;
 $$;
 
@@ -608,6 +678,7 @@ alter table customers         enable row level security;
 alter table workers           enable row level security;
 alter table orders            enable row level security;
 alter table order_items       enable row level security;
+alter table order_materials   enable row level security;
 alter table tasks             enable row level security;
 alter table payments          enable row level security;
 alter table worker_payouts    enable row level security;
@@ -640,6 +711,10 @@ create policy orders_all on orders
   with check (tenant_id = current_tenant_id());
 
 create policy order_items_all on order_items
+  for all using (tenant_id = current_tenant_id())
+  with check (tenant_id = current_tenant_id());
+
+create policy order_materials_all on order_materials
   for all using (tenant_id = current_tenant_id())
   with check (tenant_id = current_tenant_id());
 
