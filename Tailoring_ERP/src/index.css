@@ -7,14 +7,15 @@
 
 @theme inline {
   --font-sans:
-    "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times,
+    serif;
   --font-display:
-    "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times,
+    serif;
   --font-mono:
     "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --font-body:
-    "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -79,13 +80,13 @@
   --chart-3: oklch(0.55 0.15 160);
   --chart-4: oklch(0.65 0.18 30);
   --chart-5: oklch(0.5 0.12 300);
-  --sidebar: oklch(0.20 0.04 260);
+  --sidebar: oklch(0.2 0.04 260);
   --sidebar-foreground: oklch(0.93 0.01 80);
   --sidebar-primary: oklch(0.72 0.12 50);
   --sidebar-primary-foreground: oklch(0.18 0.02 250);
-  --sidebar-accent: oklch(0.30 0.05 260);
+  --sidebar-accent: oklch(0.3 0.05 260);
   --sidebar-accent-foreground: oklch(0.93 0.01 80);
-  --sidebar-border: oklch(0.30 0.05 260);
+  --sidebar-border: oklch(0.3 0.05 260);
   --sidebar-ring: oklch(0.72 0.12 50);
 }
 
@@ -117,7 +118,7 @@
   --sidebar-foreground: oklch(0.93 0.01 80);
   --sidebar-primary: oklch(0.72 0.12 50);
   --sidebar-primary-foreground: oklch(0.14 0.025 260);
-  --sidebar-accent: oklch(0.20 0.04 260);
+  --sidebar-accent: oklch(0.2 0.04 260);
   --sidebar-accent-foreground: oklch(0.93 0.01 80);
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.72 0.12 50);
@@ -133,7 +134,12 @@
     font-family: var(--font-body);
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-sans);
   }
 

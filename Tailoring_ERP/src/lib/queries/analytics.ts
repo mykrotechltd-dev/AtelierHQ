@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
 
 interface DashboardStats {
-  orderCounts: { received: number; in_progress: number; completed: number; delivered: number };
+  orderCounts: {
+    received: number;
+    in_progress: number;
+    completed: number;
+    delivered: number;
+  };
   totalOrders: number;
   revenueThisMonth: number;
   totalCollected: number;

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { useWorkers, useDeleteWorker, useUpdateWorker } from "@/lib/queries/workers.ts";
+import {
+  useWorkers,
+  useDeleteWorker,
+  useUpdateWorker,
+} from "@/lib/queries/workers.ts";
 import type { Worker } from "@/lib/supabase/types.ts";
 import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
@@ -25,7 +29,15 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty.tsx";
-import { Phone, Pencil, Trash2, UserCheck, CheckCircle2, Circle, Banknote } from "lucide-react";
+import {
+  Phone,
+  Pencil,
+  Trash2,
+  UserCheck,
+  CheckCircle2,
+  Circle,
+  Banknote,
+} from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import WorkerDialog from "./_components/worker-dialog.tsx";
 import PayoutDialog from "./_components/payout-dialog.tsx";
@@ -37,7 +49,9 @@ export default function WorkersPage() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [editWorker, setEditWorker] = useState<Worker | undefined>(undefined);
-  const [payoutWorkerId, setPayoutWorkerId] = useState<string | undefined>(undefined);
+  const [payoutWorkerId, setPayoutWorkerId] = useState<string | undefined>(
+    undefined,
+  );
 
   const handleDelete = async (id: string) => {
     try {
@@ -51,7 +65,9 @@ export default function WorkersPage() {
   const handleToggleActive = async (worker: Worker) => {
     try {
       await toggleActive({ id: worker.id, isActive: !worker.isActive });
-      toast.success(worker.isActive ? "Worker deactivated" : "Worker activated");
+      toast.success(
+        worker.isActive ? "Worker deactivated" : "Worker activated",
+      );
     } catch {
       toast.error("Failed to update worker");
     }
@@ -81,7 +97,9 @@ export default function WorkersPage() {
               <UserCheck />
             </EmptyMedia>
             <EmptyTitle>No workers yet</EmptyTitle>
-            <EmptyDescription>Add your first team member to assign tasks</EmptyDescription>
+            <EmptyDescription>
+              Add your first team member to assign tasks
+            </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -169,7 +187,9 @@ function WorkerCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="font-sans font-semibold text-base truncate">{worker.name}</p>
+              <p className="font-sans font-semibold text-base truncate">
+                {worker.name}
+              </p>
               {worker.isActive ? (
                 <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
               ) : (
@@ -224,7 +244,8 @@ function WorkerCard({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Remove {worker.name}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently remove this worker. This cannot be undone.
+                    This will permanently remove this worker. This cannot be
+                    undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

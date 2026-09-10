@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCreateOrder } from "@/lib/queries/orders.ts";
 import { useCustomers } from "@/lib/queries/customers.ts";
 import { useNavigate } from "react-router-dom";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -77,7 +77,16 @@ export default function CreateOrderDialog({
       customerId: "",
       dueDate: "",
       notes: "",
-      items: [{ description: "", garmentType: "", fabric: "", quantity: "1", unitPrice: "", notes: "" }],
+      items: [
+        {
+          description: "",
+          garmentType: "",
+          fabric: "",
+          quantity: "1",
+          unitPrice: "",
+          notes: "",
+        },
+      ],
     },
   });
 
@@ -87,10 +96,15 @@ export default function CreateOrderDialog({
   });
 
   // Per-item measurement snapshot, parallel to the items field array.
-  const [itemMeasurements, setItemMeasurements] = useState<Partial<Measurements>[]>([{}]);
+  const [itemMeasurements, setItemMeasurements] = useState<
+    Partial<Measurements>[]
+  >([{}]);
 
-  const watchItems = form.watch("items");
-  const watchCustomerId = form.watch("customerId");
+  const watchItems = useWatch({ control: form.control, name: "items" });
+  const watchCustomerId = useWatch({
+    control: form.control,
+    name: "customerId",
+  });
   const selectedCustomer = customers.find((c) => c.id === watchCustomerId);
 
   const total = watchItems.reduce((sum, item) => {
@@ -107,7 +121,10 @@ export default function CreateOrderDialog({
         const next = [...prev];
         const current = { ...(next[index] ?? {}) };
         for (const f of [...spec.required, ...spec.optional]) {
-          if (current[f] === undefined && selectedCustomer.measurements![f] !== undefined) {
+          if (
+            current[f] === undefined &&
+            selectedCustomer.measurements![f] !== undefined
+          ) {
             current[f] = selectedCustomer.measurements![f];
           }
         }
@@ -132,7 +149,9 @@ export default function CreateOrderDialog({
           unitPrice: parseFloat(i.unitPrice),
           notes: i.notes || undefined,
           measurements:
-            Object.keys(itemMeasurements[idx] ?? {}).length > 0 ? (itemMeasurements[idx] as Measurements) : undefined,
+            Object.keys(itemMeasurements[idx] ?? {}).length > 0
+              ? (itemMeasurements[idx] as Measurements)
+              : undefined,
         })),
       });
       toast.success("Order created");
@@ -203,7 +222,11 @@ export default function CreateOrderDialog({
                 <FormItem>
                   <FormLabel>Order notes</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="Any special instructions..." {...field} />
+                    <Textarea
+                      rows={2}
+                      placeholder="Any special instructions..."
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -238,7 +261,10 @@ export default function CreateOrderDialog({
 
               <div className="space-y-4">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="rounded-lg border border-border p-4 space-y-3">
+                  <div
+                    key={field.id}
+                    className="rounded-lg border border-border p-4 space-y-3"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-body text-muted-foreground">
                         Item {index + 1}
@@ -248,7 +274,9 @@ export default function CreateOrderDialog({
                           type="button"
                           onClick={() => {
                             remove(index);
-                            setItemMeasurements((prev) => prev.filter((_, i) => i !== index));
+                            setItemMeasurements((prev) =>
+                              prev.filter((_, i) => i !== index),
+                            );
                           }}
                           className="text-destructive hover:text-destructive/80 cursor-pointer"
                         >
@@ -262,9 +290,14 @@ export default function CreateOrderDialog({
                       name={`items.${index}.description`}
                       render={({ field: f }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Description *</FormLabel>
+                          <FormLabel className="text-xs">
+                            Description *
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Ankara Senator suit" {...f} />
+                            <Input
+                              placeholder="e.g. Ankara Senator suit"
+                              {...f}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -277,8 +310,15 @@ export default function CreateOrderDialog({
                         name={`items.${index}.garmentType`}
                         render={({ field: f }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Garment type</FormLabel>
-                            <Select onValueChange={(v) => handleGarmentTypeChange(index, v)} value={f.value}>
+                            <FormLabel className="text-xs">
+                              Garment type
+                            </FormLabel>
+                            <Select
+                              onValueChange={(v) =>
+                                handleGarmentTypeChange(index, v)
+                              }
+                              value={f.value}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select type" />
@@ -286,7 +326,9 @@ export default function CreateOrderDialog({
                               </FormControl>
                               <SelectContent>
                                 {GARMENT_TYPES.map((t) => (
-                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                  <SelectItem key={t} value={t}>
+                                    {t}
+                                  </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -323,9 +365,17 @@ export default function CreateOrderDialog({
                         name={`items.${index}.unitPrice`}
                         render={({ field: f }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Unit price *</FormLabel>
+                            <FormLabel className="text-xs">
+                              Unit price *
+                            </FormLabel>
                             <FormControl>
-                              <Input type="number" min="0" step="0.01" placeholder="0.00" {...f} />
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...f}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -340,22 +390,35 @@ export default function CreateOrderDialog({
                         <FormItem>
                           <FormLabel className="text-xs">Item notes</FormLabel>
                           <FormControl>
-                            <Input placeholder="Special instructions..." {...f} />
+                            <Input
+                              placeholder="Special instructions..."
+                              {...f}
+                            />
                           </FormControl>
                         </FormItem>
                       )}
                     />
 
                     {(() => {
-                      const spec = measurementSpecForGarment(watchItems[index]?.garmentType);
+                      const spec = measurementSpecForGarment(
+                        watchItems[index]?.garmentType,
+                      );
                       if (!spec) return null;
-                      const fieldsForType = [...spec.required, ...spec.optional];
+                      const fieldsForType = [
+                        ...spec.required,
+                        ...spec.optional,
+                      ];
                       const values = itemMeasurements[index] ?? {};
-                      const missing = spec.required.filter((f) => values[f] === undefined);
+                      const missing = spec.required.filter(
+                        (f) => values[f] === undefined,
+                      );
                       return (
                         <div className="space-y-2 rounded-md border border-border p-3">
                           <p className="text-xs font-body font-medium text-muted-foreground uppercase tracking-wide">
-                            Measurements {selectedCustomer ? "(from customer profile — editable)" : ""}
+                            Measurements{" "}
+                            {selectedCustomer
+                              ? "(from customer profile — editable)"
+                              : ""}
                           </p>
                           <div className="grid grid-cols-2 gap-2">
                             {fieldsForType.map((f) => (
@@ -374,7 +437,11 @@ export default function CreateOrderDialog({
                                     const v = e.target.value;
                                     setItemMeasurements((prev) => {
                                       const next = [...prev];
-                                      next[index] = { ...(next[index] ?? {}), [f]: v === "" ? undefined : parseFloat(v) };
+                                      next[index] = {
+                                        ...(next[index] ?? {}),
+                                        [f]:
+                                          v === "" ? undefined : parseFloat(v),
+                                      };
                                       return next;
                                     });
                                   }}
@@ -385,7 +452,10 @@ export default function CreateOrderDialog({
                           {missing.length > 0 && (
                             <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-body">
                               <AlertTriangle className="size-3.5" />
-                              Missing: {missing.map((f) => MEASUREMENT_LABELS[f]).join(", ")}
+                              Missing:{" "}
+                              {missing
+                                .map((f) => MEASUREMENT_LABELS[f])
+                                .join(", ")}
                             </p>
                           )}
                         </div>
@@ -407,7 +477,9 @@ export default function CreateOrderDialog({
               <div className="bg-muted rounded-lg px-4 py-2 text-right">
                 <p className="text-xs text-muted-foreground font-body">Total</p>
                 <p className="font-sans text-lg font-semibold">
-                  {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {total.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </div>

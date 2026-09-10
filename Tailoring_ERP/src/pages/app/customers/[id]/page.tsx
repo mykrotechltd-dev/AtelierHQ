@@ -8,7 +8,12 @@ import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +25,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog.tsx";
-import { Phone, Mail, FileText, Ruler, Pencil, Trash2, ArrowLeft } from "lucide-react";
+import {
+  Phone,
+  Mail,
+  FileText,
+  Ruler,
+  Pencil,
+  Trash2,
+  ArrowLeft,
+} from "lucide-react";
 import CustomerDialog from "../_components/customer-dialog.tsx";
 
 const MEASUREMENT_LABELS: Record<string, string> = {
@@ -89,13 +102,16 @@ export default function CustomerDetailPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete customer?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently delete {customer.name} and all their data. This
-                cannot be undone.
+                This will permanently delete {customer.name} and all their data.
+                This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive text-white hover:bg-destructive/90"
+              >
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -124,7 +140,9 @@ export default function CustomerDetailPage() {
             </div>
           ) : null}
           {!customer.phone && !customer.email && (
-            <p className="text-sm text-muted-foreground font-body">No contact info recorded</p>
+            <p className="text-sm text-muted-foreground font-body">
+              No contact info recorded
+            </p>
           )}
           {customer.notes ? (
             <div className="flex items-start gap-2 font-body text-sm pt-1 border-t border-border mt-2">
@@ -162,14 +180,25 @@ export default function CustomerDetailPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Object.entries(MEASUREMENT_LABELS).map(([key, label]) => {
-                  const val = customer.measurements?.[key as keyof typeof customer.measurements];
-                  if (val === undefined || val === null || typeof val === "string") return null;
+                  const val =
+                    customer.measurements?.[
+                      key as keyof typeof customer.measurements
+                    ];
+                  if (
+                    val === undefined ||
+                    val === null ||
+                    typeof val === "string"
+                  )
+                    return null;
                   const isWeight = key === "weight";
                   return (
                     <div key={key} className="bg-muted rounded-md px-3 py-2">
-                      <p className="text-xs text-muted-foreground font-body">{label}</p>
+                      <p className="text-xs text-muted-foreground font-body">
+                        {label}
+                      </p>
                       <p className="font-sans font-medium text-sm">
-                        {isWeight ? val : formatMeasurement(val, unit)} {isWeight ? "kg" : unitLabel(unit)}
+                        {isWeight ? val : formatMeasurement(val, unit)}{" "}
+                        {isWeight ? "kg" : unitLabel(unit)}
                       </p>
                     </div>
                   );

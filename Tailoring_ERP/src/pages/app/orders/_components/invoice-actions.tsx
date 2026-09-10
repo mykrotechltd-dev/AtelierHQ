@@ -12,13 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.tsx";
 import { FileText, Download, MessageCircle, ChevronDown } from "lucide-react";
-import { downloadInvoicePDF, buildWhatsAppUrl, type InvoiceData } from "@/lib/invoice-pdf.ts";
+import {
+  downloadInvoicePDF,
+  buildWhatsAppUrl,
+  type InvoiceData,
+} from "@/lib/invoice-pdf.ts";
 
-export default function InvoiceActions({
-  orderId,
-}: {
-  orderId: string;
-}) {
+export default function InvoiceActions({ orderId }: { orderId: string }) {
   const [generating, setGenerating] = useState(false);
 
   const order = useOrder(orderId);
@@ -28,7 +28,8 @@ export default function InvoiceActions({
   const isReady = !!order && !!tenant && paymentSummary !== undefined;
 
   const buildInvoiceData = (): InvoiceData => {
-    if (!order || !tenant || !paymentSummary) throw new Error("Data not loaded");
+    if (!order || !tenant || !paymentSummary)
+      throw new Error("Data not loaded");
     return {
       orderNumber: order.orderNumber,
       status: order.status,

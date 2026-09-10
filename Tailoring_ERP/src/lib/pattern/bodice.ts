@@ -31,7 +31,7 @@ import {
 export function undraftableBlock(
   id: BlockType,
   diagnostics: Diagnostic[],
-  missing: MeasurementKey[]
+  missing: MeasurementKey[],
 ): PatternBlock {
   return {
     id,
@@ -56,7 +56,7 @@ export function undraftableBlock(
 export function draftBodice(
   m: Measurements,
   panel: PanelSide,
-  opts: BlockOptions = {}
+  opts: BlockOptions = {},
 ): PatternBlock {
   const id: BlockType = panel === "front" ? "bodice-front" : "bodice-back";
   const required = BLOCK_REQUIRED[id];
@@ -75,14 +75,24 @@ export function draftBodice(
   // Relationship warnings are advisory, so they attach to a block that drafted.
   return {
     ...block,
-    diagnostics: [...checkRelationships(m), ...validation.diagnostics, ...block.diagnostics],
+    diagnostics: [
+      ...checkRelationships(m),
+      ...validation.diagnostics,
+      ...block.diagnostics,
+    ],
   };
 }
 
-export function bodiceFront(m: Measurements, opts: BlockOptions = {}): PatternBlock {
+export function bodiceFront(
+  m: Measurements,
+  opts: BlockOptions = {},
+): PatternBlock {
   return draftBodice(m, "front", opts);
 }
 
-export function bodiceBack(m: Measurements, opts: BlockOptions = {}): PatternBlock {
+export function bodiceBack(
+  m: Measurements,
+  opts: BlockOptions = {},
+): PatternBlock {
   return draftBodice(m, "back", opts);
 }

@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { usePayments, useOutstandingSummary, useDeletePayment, usePaymentsByOrder } from "@/lib/queries/payments.ts";
+import {
+  usePayments,
+  useOutstandingSummary,
+  useDeletePayment,
+  usePaymentsByOrder,
+} from "@/lib/queries/payments.ts";
 import { useOrders } from "@/lib/queries/orders.ts";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -26,7 +31,14 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty.tsx";
-import { CreditCard, Trash2, TrendingDown, Banknote, Receipt, AlertCircle } from "lucide-react";
+import {
+  CreditCard,
+  Trash2,
+  TrendingDown,
+  Banknote,
+  Receipt,
+  AlertCircle,
+} from "lucide-react";
 import RecordPaymentDialogInner from "./_components/record-payment-dialog.tsx";
 import { useNavigate } from "react-router-dom";
 import {
@@ -45,7 +57,8 @@ const METHOD_LABELS: Record<string, string> = {
 
 const METHOD_COLORS: Record<string, string> = {
   cash: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  bank_transfer: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  bank_transfer:
+    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   card: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
   other: "bg-muted text-muted-foreground",
 };
@@ -177,7 +190,9 @@ export default function PaymentsPage() {
 
               <div className="flex items-center gap-3 shrink-0">
                 <span className="font-sans font-semibold text-sm tabular-nums">
-                  {payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {payment.amount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
                 </span>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -190,7 +205,9 @@ export default function PaymentsPage() {
                       <AlertDialogTitle>Delete this payment?</AlertDialogTitle>
                       <AlertDialogDescription>
                         This will remove the payment of{" "}
-                        {payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}{" "}
+                        {payment.amount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}{" "}
                         from {payment.orderNumber}. This cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -263,7 +280,9 @@ function SummaryCard({
         <p className={`font-sans font-bold text-xl tabular-nums ${valueColor}`}>
           {count !== undefined
             ? count
-            : (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            : (value ?? 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
         </p>
       </CardContent>
     </Card>

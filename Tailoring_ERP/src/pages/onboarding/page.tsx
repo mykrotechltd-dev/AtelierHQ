@@ -111,7 +111,10 @@ export default function Onboarding() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="font-body">Currency *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select currency" />

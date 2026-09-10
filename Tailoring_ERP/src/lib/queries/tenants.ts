@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
-import type { FincraSettingsPublic, Tenant, UserRole } from "../supabase/types.ts";
+import type {
+  FincraSettingsPublic,
+  Tenant,
+  UserRole,
+} from "../supabase/types.ts";
 import { useSession } from "../../components/providers/auth.tsx";
 
 function mapTenant(row: Record<string, unknown>, role?: UserRole): Tenant {
@@ -29,12 +33,16 @@ export function useMyTenant(): Tenant | null | undefined {
         .maybeSingle();
       if (profileError) throw profileError;
       if (!profile || !profile.tenants) return null;
-      return mapTenant(profile.tenants as unknown as Record<string, unknown>, profile.role as UserRole);
+      return mapTenant(
+        profile.tenants as unknown as Record<string, unknown>,
+        profile.role as UserRole,
+      );
     },
     enabled: !!userId,
   });
 
-  if (sessionStatus === "loading" || (userId && query.isLoading)) return undefined;
+  if (sessionStatus === "loading" || (userId && query.isLoading))
+    return undefined;
   if (!userId) return null;
   return query.data ?? null;
 }
@@ -42,13 +50,21 @@ export function useMyTenant(): Tenant | null | undefined {
 export function useCreateTenant() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { name: string; phone?: string; address?: string; currency: string }) => {
-      const { data, error } = await supabase.rpc("create_tenant_for_current_user", {
-        p_name: input.name,
-        p_phone: input.phone ?? null,
-        p_address: input.address ?? null,
-        p_currency: input.currency,
-      });
+    mutationFn: async (input: {
+      name: string;
+      phone?: string;
+      address?: string;
+      currency: string;
+    }) => {
+      const { data, error } = await supabase.rpc(
+        "create_tenant_for_current_user",
+        {
+          p_name: input.name,
+          p_phone: input.phone ?? null,
+          p_address: input.address ?? null,
+          p_currency: input.currency,
+        },
+      );
       if (error) throw error;
       return data as string;
     },
@@ -83,7 +99,13 @@ export function useFincraSettings(): FincraSettingsPublic | null | undefined {
 export function useSetFincraSettings() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { businessId: string; publicKey: string; secretKey: string; webhookSecret: string; isLive: boolean }) => {
+    mutationFn: async (input: {
+      businessId: string;
+      publicKey: string;
+      secretKey: string;
+      webhookSecret: string;
+      isLive: boolean;
+    }) => {
       const { error } = await supabase.rpc("set_fincra_settings", {
         p_business_id: input.businessId,
         p_public_key: input.publicKey,
@@ -101,7 +123,12 @@ export function useSetFincraSettings() {
 export function useUpdateTenant() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { name?: string; phone?: string; address?: string; currency?: string }) => {
+    mutationFn: async (input: {
+      name?: string;
+      phone?: string;
+      address?: string;
+      currency?: string;
+    }) => {
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("tenant_id")
@@ -109,7 +136,10 @@ export function useUpdateTenant() {
         .single();
       if (profileError) throw profileError;
 
-      const { error } = await supabase.from("tenants").update(input).eq("id", profile.tenant_id);
+      const { error } = await supabase
+        .from("tenants")
+        .update(input)
+        .eq("id", profile.tenant_id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tenant"] }),

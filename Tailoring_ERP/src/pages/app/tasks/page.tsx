@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { useTasks, useUpdateTask, useDeleteTask, useWorkers } from "@/lib/queries/workers.ts";
+import {
+  useTasks,
+  useUpdateTask,
+  useDeleteTask,
+  useWorkers,
+} from "@/lib/queries/workers.ts";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
@@ -24,17 +29,43 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog.tsx";
-import { CheckSquare, CalendarDays, ArrowRight, Trash2, Banknote } from "lucide-react";
+import {
+  CheckSquare,
+  CalendarDays,
+  ArrowRight,
+  Trash2,
+  Banknote,
+} from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import CreateTaskDialog from "./_components/create-task-dialog.tsx";
 import PayoutDialog from "../workers/_components/payout-dialog.tsx";
 
 type TaskStatus = "pending" | "in_progress" | "done";
 
-const COLUMNS: { status: TaskStatus; label: string; color: string; dot: string }[] = [
-  { status: "pending", label: "Pending", color: "border-t-blue-400", dot: "bg-blue-400" },
-  { status: "in_progress", label: "In Progress", color: "border-t-amber-400", dot: "bg-amber-400" },
-  { status: "done", label: "Done", color: "border-t-emerald-500", dot: "bg-emerald-500" },
+const COLUMNS: {
+  status: TaskStatus;
+  label: string;
+  color: string;
+  dot: string;
+}[] = [
+  {
+    status: "pending",
+    label: "Pending",
+    color: "border-t-blue-400",
+    dot: "bg-blue-400",
+  },
+  {
+    status: "in_progress",
+    label: "In Progress",
+    color: "border-t-amber-400",
+    dot: "bg-amber-400",
+  },
+  {
+    status: "done",
+    label: "Done",
+    color: "border-t-emerald-500",
+    dot: "bg-emerald-500",
+  },
 ];
 
 const STATUS_NEXT: Record<TaskStatus, TaskStatus | null> = {
@@ -46,7 +77,9 @@ const STATUS_NEXT: Record<TaskStatus, TaskStatus | null> = {
 export default function TasksPage() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [payoutOpen, setPayoutOpen] = useState(false);
-  const [filterWorkerId, setFilterWorkerId] = useState<string | undefined>(undefined);
+  const [filterWorkerId, setFilterWorkerId] = useState<string | undefined>(
+    undefined,
+  );
 
   const tasks = useTasks(undefined, filterWorkerId);
   const workers = useWorkers();
@@ -78,8 +111,15 @@ export default function TasksPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <PageHeader title="Tasks" description="Worker assignments and task board.">
-        <Button size="sm" variant="secondary" onClick={() => setPayoutOpen(true)}>
+      <PageHeader
+        title="Tasks"
+        description="Worker assignments and task board."
+      >
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setPayoutOpen(true)}
+        >
           <Banknote className="size-3.5 mr-1" /> Record payout
         </Button>
         <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
@@ -96,7 +136,7 @@ export default function TasksPage() {
               "px-3 py-1 rounded-full text-xs font-body border transition-colors cursor-pointer",
               filterWorkerId === undefined
                 ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:border-primary/40"
+                : "border-border text-muted-foreground hover:border-primary/40",
             )}
           >
             All workers
@@ -111,7 +151,7 @@ export default function TasksPage() {
                   "px-3 py-1 rounded-full text-xs font-body border transition-colors cursor-pointer",
                   filterWorkerId === w.id
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40"
+                    : "border-border text-muted-foreground hover:border-primary/40",
                 )}
               >
                 {w.name}
@@ -133,7 +173,9 @@ export default function TasksPage() {
               <CheckSquare />
             </EmptyMedia>
             <EmptyTitle>No tasks yet</EmptyTitle>
-            <EmptyDescription>Create a task and assign it to a worker</EmptyDescription>
+            <EmptyDescription>
+              Create a task and assign it to a worker
+            </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
@@ -146,12 +188,20 @@ export default function TasksPage() {
           {COLUMNS.map(({ status, label, color, dot }) => {
             const col = getTasksByStatus(status);
             return (
-              <div key={status} className={cn("rounded-lg border-t-2 border border-border bg-card", color)}>
+              <div
+                key={status}
+                className={cn(
+                  "rounded-lg border-t-2 border border-border bg-card",
+                  color,
+                )}
+              >
                 {/* Column header */}
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
                   <div className="flex items-center gap-2">
                     <span className={cn("size-2 rounded-full", dot)} />
-                    <span className="font-body text-sm font-medium">{label}</span>
+                    <span className="font-body text-sm font-medium">
+                      {label}
+                    </span>
                   </div>
                   <span className="text-xs text-muted-foreground font-body bg-muted rounded-full px-2 py-0.5">
                     {col.length}
@@ -190,7 +240,9 @@ export default function TasksPage() {
                         {task.payout != null && (
                           <div className="flex items-center gap-1 text-[11px] text-accent font-body">
                             <Banknote className="size-3" />
-                            {task.payout.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {task.payout.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                            })}
                           </div>
                         )}
                         <div className="flex items-center justify-between pt-1">
@@ -199,7 +251,9 @@ export default function TasksPage() {
                               size="sm"
                               variant="secondary"
                               className="h-6 px-2 text-[11px]"
-                              onClick={() => handleAdvance(task.id, status as TaskStatus)}
+                              onClick={() =>
+                                handleAdvance(task.id, status as TaskStatus)
+                              }
                             >
                               Move <ArrowRight className="size-3 ml-1" />
                             </Button>
@@ -216,7 +270,9 @@ export default function TasksPage() {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete task?</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Delete task?
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
                                   This will permanently delete this task.
                                 </AlertDialogDescription>
@@ -247,10 +303,7 @@ export default function TasksPage() {
         open={taskDialogOpen}
         onClose={() => setTaskDialogOpen(false)}
       />
-      <PayoutDialog
-        open={payoutOpen}
-        onClose={() => setPayoutOpen(false)}
-      />
+      <PayoutDialog open={payoutOpen} onClose={() => setPayoutOpen(false)} />
     </div>
   );
 }

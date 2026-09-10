@@ -1,7 +1,15 @@
 import { useMyTenant } from "@/lib/queries/tenants.ts";
-import { useDashboardStats, useRevenueByMonth } from "@/lib/queries/analytics.ts";
+import {
+  useDashboardStats,
+  useRevenueByMonth,
+} from "@/lib/queries/analytics.ts";
 import PageHeader from "@/components/page-header.tsx";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import {
   ClipboardList,
@@ -46,7 +54,8 @@ export default function Dashboard() {
 
   const navigate = useNavigate();
 
-  const isLoading = stats === undefined || revenue === undefined || tenant === undefined;
+  const isLoading =
+    stats === undefined || revenue === undefined || tenant === undefined;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -103,9 +112,14 @@ export default function Dashboard() {
             >
               <AlertCircle className="size-4 text-yellow-500 shrink-0" />
               <span className="text-foreground/80">
-                <strong className="text-foreground">{fmt(stats.totalOutstanding, currency)}</strong>{" "}
-                outstanding across {stats.orderCounts.received + stats.orderCounts.in_progress + stats.orderCounts.completed} open orders.
-                Click to review payments.
+                <strong className="text-foreground">
+                  {fmt(stats.totalOutstanding, currency)}
+                </strong>{" "}
+                outstanding across{" "}
+                {stats.orderCounts.received +
+                  stats.orderCounts.in_progress +
+                  stats.orderCounts.completed}{" "}
+                open orders. Click to review payments.
               </span>
             </div>
           )}
@@ -115,9 +129,21 @@ export default function Dashboard() {
             {(
               [
                 { label: "Received", key: "received", color: "bg-blue-500" },
-                { label: "In Progress", key: "in_progress", color: "bg-amber-500" },
-                { label: "Completed", key: "completed", color: "bg-emerald-500" },
-                { label: "Delivered", key: "delivered", color: "bg-muted-foreground" },
+                {
+                  label: "In Progress",
+                  key: "in_progress",
+                  color: "bg-amber-500",
+                },
+                {
+                  label: "Completed",
+                  key: "completed",
+                  color: "bg-emerald-500",
+                },
+                {
+                  label: "Delivered",
+                  key: "delivered",
+                  color: "bg-muted-foreground",
+                },
               ] as const
             ).map(({ label, key, color }) => (
               <div
@@ -127,7 +153,9 @@ export default function Dashboard() {
               >
                 <div className={`w-2 h-8 rounded-full ${color}`} />
                 <div>
-                  <p className="text-2xl font-bold font-display">{stats.orderCounts[key]}</p>
+                  <p className="text-2xl font-bold font-display">
+                    {stats.orderCounts[key]}
+                  </p>
                   <p className="text-xs text-muted-foreground">{label}</p>
                 </div>
               </div>
@@ -139,21 +167,36 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Wallet className="size-4 text-muted-foreground" />
-                <CardTitle className="text-base">Revenue — Last 6 Months</CardTitle>
+                <CardTitle className="text-base">
+                  Revenue — Last 6 Months
+                </CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={revenue} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                <BarChart
+                  data={revenue}
+                  margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-border"
+                    vertical={false}
+                  />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{
+                      fontSize: 12,
+                      fill: "hsl(var(--muted-foreground))",
+                    }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{
+                      fontSize: 11,
+                      fill: "hsl(var(--muted-foreground))",
+                    }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v: number) =>
@@ -174,16 +217,28 @@ export default function Dashboard() {
                       name === "billed" ? "Billed" : "Collected",
                     ]}
                   />
-                  <Bar dataKey="billed" fill="rgba(28,40,80,0.22)" radius={[4, 4, 0, 0]} name="billed" />
-                  <Bar dataKey="collected" fill="#1c2850" radius={[4, 4, 0, 0]} name="collected" />
+                  <Bar
+                    dataKey="billed"
+                    fill="rgba(28,40,80,0.22)"
+                    radius={[4, 4, 0, 0]}
+                    name="billed"
+                  />
+                  <Bar
+                    dataKey="collected"
+                    fill="#1c2850"
+                    radius={[4, 4, 0, 0]}
+                    name="collected"
+                  />
                 </BarChart>
               </ResponsiveContainer>
               <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-2 rounded bg-primary" /> Collected
+                  <span className="inline-block w-3 h-2 rounded bg-primary" />{" "}
+                  Collected
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-2 rounded bg-muted-foreground/30" /> Billed
+                  <span className="inline-block w-3 h-2 rounded bg-muted-foreground/30" />{" "}
+                  Billed
                 </span>
               </div>
             </CardContent>
@@ -214,7 +269,9 @@ function KpiCard({
     >
       <CardHeader className="pb-1 pt-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+            {label}
+          </p>
           <Icon className="size-4 text-muted-foreground" />
         </div>
       </CardHeader>

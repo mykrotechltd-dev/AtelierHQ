@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
-import type { Task, TaskStatus, Worker, WorkerPayout } from "../supabase/types.ts";
+import type {
+  Task,
+  TaskStatus,
+  Worker,
+  WorkerPayout,
+} from "../supabase/types.ts";
 import { usePaginatedQuery } from "./pagination.ts";
 
 function mapWorker(row: Record<string, unknown>): Worker {
@@ -26,7 +31,10 @@ function mapTask(row: Record<string, unknown>): Task {
     status: row.status as TaskStatus,
     dueDate: (row.due_date as string) ?? null,
     completedAt: (row.completed_at as string) ?? null,
-    payout: row.payout === null || row.payout === undefined ? null : Number(row.payout),
+    payout:
+      row.payout === null || row.payout === undefined
+        ? null
+        : Number(row.payout),
   };
 }
 
@@ -48,7 +56,10 @@ export function useWorkers(): Worker[] | undefined {
   const query = useQuery({
     queryKey: ["workers"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("workers").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("workers")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map(mapWorker);
     },
@@ -60,7 +71,11 @@ export function useWorker(id: string | undefined): Worker | null | undefined {
   const query = useQuery({
     queryKey: ["worker", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("workers").select("*").eq("id", id!).single();
+      const { data, error } = await supabase
+        .from("workers")
+        .select("*")
+        .eq("id", id!)
+        .single();
       if (error) throw error;
       return mapWorker(data);
     },
@@ -73,7 +88,11 @@ export function useWorker(id: string | undefined): Worker | null | undefined {
 export function useCreateWorker() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { name: string; phone?: string; specialization?: string }) => {
+    mutationFn: async (input: {
+      name: string;
+      phone?: string;
+      specialization?: string;
+    }) => {
       const { error } = await supabase.from("workers").insert({
         name: input.name,
         phone: input.phone ?? null,
@@ -90,11 +109,20 @@ export function useCreateWorker() {
 export function useUpdateWorker() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { id: string; name?: string; phone?: string; specialization?: string; isActive?: boolean }) => {
+    mutationFn: async (input: {
+      id: string;
+      name?: string;
+      phone?: string;
+      specialization?: string;
+      isActive?: boolean;
+    }) => {
       const { id, isActive, ...rest } = input;
       const { error } = await supabase
         .from("workers")
-        .update({ ...rest, ...(isActive !== undefined ? { is_active: isActive } : {}) })
+        .update({
+          ...rest,
+          ...(isActive !== undefined ? { is_active: isActive } : {}),
+        })
         .eq("id", id);
       if (error) throw error;
     },
@@ -110,7 +138,10 @@ export function useDeleteWorker() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { error } = await supabase.from("workers").delete().eq("id", input.id);
+      const { error } = await supabase
+        .from("workers")
+        .delete()
+        .eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workers"] }),
@@ -120,19 +151,28 @@ export function useDeleteWorker() {
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
-export function useTasks(status: TaskStatus | undefined, workerId: string | undefined) {
+export function useTasks(
+  status: TaskStatus | undefined,
+  workerId: string | undefined,
+) {
   const query = useQuery({
     queryKey: ["tasks", status ?? "", workerId ?? ""],
     queryFn: async () => {
-      let q = supabase.from("tasks").select("*, workers(name), orders(order_number)");
+      let q = supabase
+        .from("tasks")
+        .select("*, workers(name), orders(order_number)");
       if (status) q = q.eq("status", status);
       if (workerId) q = q.eq("worker_id", workerId);
       const { data, error } = await q.order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...mapTask(row),
-        workerName: (row.workers as unknown as { name: string } | null)?.name ?? "Unknown",
-        orderNumber: (row.orders as unknown as { order_number: string } | null)?.order_number ?? "—",
+        workerName:
+          (row.workers as unknown as { name: string } | null)?.name ??
+          "Unknown",
+        orderNumber:
+          (row.orders as unknown as { order_number: string } | null)
+            ?.order_number ?? "—",
       }));
     },
   });
@@ -180,7 +220,10 @@ export function useUpdateTask() {
       const { id, workerId, ...rest } = input;
       const { error } = await supabase
         .from("tasks")
-        .update({ ...rest, ...(workerId !== undefined ? { worker_id: workerId } : {}) })
+        .update({
+          ...rest,
+          ...(workerId !== undefined ? { worker_id: workerId } : {}),
+        })
         .eq("id", id);
       if (error) throw error;
     },
@@ -196,7 +239,10 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { error } = await supabase.from("tasks").delete().eq("id", input.id);
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
@@ -212,21 +258,31 @@ export function usePayouts(workerId: string | undefined, pageSize = 20) {
     async (offset, limit) => {
       let q = supabase.from("worker_payouts").select("*, workers(name)");
       if (workerId) q = q.eq("worker_id", workerId);
-      const { data, error } = await q.order("paid_at", { ascending: false }).range(offset, offset + limit - 1);
+      const { data, error } = await q
+        .order("paid_at", { ascending: false })
+        .range(offset, offset + limit - 1);
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...mapPayout(row),
-        workerName: (row.workers as unknown as { name: string } | null)?.name ?? "Unknown",
+        workerName:
+          (row.workers as unknown as { name: string } | null)?.name ??
+          "Unknown",
       }));
     },
-    pageSize
+    pageSize,
   );
 }
 
 export function useRecordPayout() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { orderId: string; workerId: string; amount: number; notes?: string; paidAt?: string }) => {
+    mutationFn: async (input: {
+      orderId: string;
+      workerId: string;
+      amount: number;
+      notes?: string;
+      paidAt?: string;
+    }) => {
       const { error } = await supabase.rpc("record_worker_payment", {
         p_order_id: input.orderId,
         p_worker_id: input.workerId,
@@ -260,7 +316,9 @@ export function useOrderPaymentTrail(orderId: string | undefined) {
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...mapPayout(row),
-        workerName: (row.workers as unknown as { name: string } | null)?.name ?? "Unknown",
+        workerName:
+          (row.workers as unknown as { name: string } | null)?.name ??
+          "Unknown",
       }));
     },
     enabled: !!orderId,
@@ -272,7 +330,10 @@ export function useDeletePayout() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { error } = await supabase.from("worker_payouts").delete().eq("id", input.id);
+      const { error } = await supabase
+        .from("worker_payouts")
+        .delete()
+        .eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payouts"] }),

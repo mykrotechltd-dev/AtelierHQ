@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { useRecordPayment, useCreateFincraCheckout } from "@/lib/queries/payments.ts";
+import {
+  useRecordPayment,
+  useCreateFincraCheckout,
+} from "@/lib/queries/payments.ts";
 import { useFincraSettings } from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -75,9 +78,13 @@ export default function RecordPaymentDialog({
     setRedirecting(true);
     try {
       const url = await createFincraCheckout({ orderId, amount });
+      // Redirecting the browser from a click handler, not during render — safe
+      // despite the compiler's static "external mutation" flag.
+      // eslint-disable-next-line react-hooks/immutability
       window.location.href = url;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start checkout";
+      const message =
+        err instanceof Error ? err.message : "Failed to start checkout";
       toast.error(message);
       setRedirecting(false);
     }
@@ -112,7 +119,8 @@ export default function RecordPaymentDialog({
       form.reset();
       onClose();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to record payment";
+      const message =
+        err instanceof Error ? err.message : "Failed to record payment";
       toast.error(message);
     } finally {
       setSaving(false);
@@ -128,9 +136,12 @@ export default function RecordPaymentDialog({
 
         {outstanding > 0 && (
           <div className="rounded-md bg-muted px-3 py-2 text-sm font-body text-muted-foreground -mt-1">
-            Outstanding on <span className="font-medium text-foreground">{orderNumber}</span>:{" "}
+            Outstanding on{" "}
+            <span className="font-medium text-foreground">{orderNumber}</span>:{" "}
             <span className="font-semibold text-foreground">
-              {outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {outstanding.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
             </span>
           </div>
         )}
@@ -144,7 +155,9 @@ export default function RecordPaymentDialog({
             onClick={handlePayByCard}
           >
             <CreditCard className="size-3.5 mr-1" />
-            {redirecting ? "Redirecting to Fincra…" : "Pay by card (Fincra Checkout)"}
+            {redirecting
+              ? "Redirecting to Fincra…"
+              : "Pay by card (Fincra Checkout)"}
           </Button>
         )}
 
@@ -157,7 +170,13 @@ export default function RecordPaymentDialog({
                 <FormItem>
                   <FormLabel>Amount *</FormLabel>
                   <FormControl>
-                    <Input type="number" min="0.01" step="0.01" placeholder="0.00" {...field} />
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -207,7 +226,11 @@ export default function RecordPaymentDialog({
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="e.g. Deposit payment" {...field} />
+                    <Textarea
+                      rows={2}
+                      placeholder="e.g. Deposit payment"
+                      {...field}
+                    />
                   </FormControl>
                 </FormItem>
               )}

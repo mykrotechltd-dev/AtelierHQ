@@ -61,9 +61,11 @@ export class PathBuilder {
     cp2x: number,
     cp2y: number,
     x: number,
-    y: number
+    y: number,
   ): this {
-    this.parts.push(`C ${r(cp1x)} ${r(cp1y)} ${r(cp2x)} ${r(cp2y)} ${r(x)} ${r(y)}`);
+    this.parts.push(
+      `C ${r(cp1x)} ${r(cp1y)} ${r(cp2x)} ${r(cp2y)} ${r(x)} ${r(y)}`,
+    );
     this.current = { x, y };
     return this;
   }
@@ -101,9 +103,17 @@ function quadPoint(t: number, p0: number, cp: number, p1: number): number {
   return mt * mt * p0 + 2 * mt * t * cp + t * t * p1;
 }
 
-function cubicPoint(t: number, p0: number, cp1: number, cp2: number, p1: number): number {
+function cubicPoint(
+  t: number,
+  p0: number,
+  cp1: number,
+  cp2: number,
+  p1: number,
+): number {
   const mt = 1 - t;
-  return mt ** 3 * p0 + 3 * mt ** 2 * t * cp1 + 3 * mt * t ** 2 * cp2 + t ** 3 * p1;
+  return (
+    mt ** 3 * p0 + 3 * mt ** 2 * t * cp1 + 3 * mt * t ** 2 * cp2 + t ** 3 * p1
+  );
 }
 
 // ── Bounds ────────────────────────────────────────────────────────────────────
@@ -169,7 +179,11 @@ function accumulate(d: string, e: Extent): void {
     } else if (letter === "C" && n.length >= 6) {
       for (let i = 0; i <= RENDER.flattenSteps; i++) {
         const t = i / RENDER.flattenSteps;
-        extend(e, cubicPoint(t, cx, n[0], n[2], n[4]), cubicPoint(t, cy, n[1], n[3], n[5]));
+        extend(
+          e,
+          cubicPoint(t, cx, n[0], n[2], n[4]),
+          cubicPoint(t, cy, n[1], n[3], n[5]),
+        );
       }
       cx = n[4];
       cy = n[5];
@@ -186,12 +200,20 @@ function accumulate(d: string, e: Extent): void {
  * Falls back to a small placeholder box when there is nothing to measure, so a
  * caller never has to handle an infinite or zero-area viewBox.
  */
-export function boundsOf(ds: readonly string[], padding = RENDER.viewBoxPadding): Bounds {
+export function boundsOf(
+  ds: readonly string[],
+  padding = RENDER.viewBoxPadding,
+): Bounds {
   const e: Extent = { ...EMPTY };
   for (const d of ds) accumulate(d, e);
 
   if (!Number.isFinite(e.minX) || !Number.isFinite(e.minY)) {
-    return { x: -padding, y: -padding, w: 30 + padding * 2, h: 40 + padding * 2 };
+    return {
+      x: -padding,
+      y: -padding,
+      w: 30 + padding * 2,
+      h: 40 + padding * 2,
+    };
   }
 
   return {

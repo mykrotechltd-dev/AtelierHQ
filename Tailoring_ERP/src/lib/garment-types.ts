@@ -33,19 +33,37 @@ interface GarmentMeasurementSpec {
   optional: MeasurementField[];
 }
 
-export const GARMENT_MEASUREMENT_MAP: Record<GarmentType, GarmentMeasurementSpec> = {
-  Shirt: { required: ["chest", "shoulder", "sleeveLength", "neck"], optional: ["height"] },
-  Trousers: { required: ["waist", "hips", "inseam"], optional: ["thigh", "height"] },
+export const GARMENT_MEASUREMENT_MAP: Record<
+  GarmentType,
+  GarmentMeasurementSpec
+> = {
+  Shirt: {
+    required: ["chest", "shoulder", "sleeveLength", "neck"],
+    optional: ["height"],
+  },
+  Trousers: {
+    required: ["waist", "hips", "inseam"],
+    optional: ["thigh", "height"],
+  },
   Skirt: { required: ["waist", "hips"], optional: ["height"] },
-  Dress: { required: ["chest", "waist", "hips", "shoulder"], optional: ["sleeveLength", "height"] },
-  "Suit/Jacket": { required: ["chest", "shoulder", "sleeveLength"], optional: ["waist", "neck", "height"] },
-  Gown: { required: ["chest", "waist", "hips", "shoulder"], optional: ["sleeveLength", "height"] },
+  Dress: {
+    required: ["chest", "waist", "hips", "shoulder"],
+    optional: ["sleeveLength", "height"],
+  },
+  "Suit/Jacket": {
+    required: ["chest", "shoulder", "sleeveLength"],
+    optional: ["waist", "neck", "height"],
+  },
+  Gown: {
+    required: ["chest", "waist", "hips", "shoulder"],
+    optional: ["sleeveLength", "height"],
+  },
 };
 
 /** Returns the required/optional measurement fields for a garment type, or
  *  undefined for a type outside the mapped list (free-text legacy values). */
 export function measurementSpecForGarment(
-  garmentType: string | null | undefined
+  garmentType: string | null | undefined,
 ): GarmentMeasurementSpec | undefined {
   return GARMENT_MEASUREMENT_MAP[garmentType as GarmentType];
 }

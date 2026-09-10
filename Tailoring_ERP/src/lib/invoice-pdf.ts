@@ -93,7 +93,10 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
   const metaRight = pageW - margin;
   const metaLabels = [
     ["Date:", format(new Date(), "dd MMM yyyy")],
-    ["Status:", data.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())],
+    [
+      "Status:",
+      data.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    ],
     ...(data.dueDate
       ? [["Due:", format(parseISO(data.dueDate), "dd MMM yyyy")]]
       : []),
@@ -182,7 +185,9 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
     margin: { left: margin, right: margin },
   });
 
-  y = ((doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY) + 6;
+  y =
+    (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+      .finalY + 6;
 
   // ── Totals block ──────────────────────────────────────────────────────────
   const totalsX = pageW - margin - 70;
@@ -190,7 +195,15 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
 
   // Background
   doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(totalsX, y, totalsW, data.payments.length > 0 ? 36 : 18, 2, 2, "F");
+  doc.roundedRect(
+    totalsX,
+    y,
+    totalsW,
+    data.payments.length > 0 ? 36 : 18,
+    2,
+    2,
+    "F",
+  );
 
   // Order total
   doc.setFont("helvetica", "normal");
@@ -199,7 +212,12 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
   doc.text("Order Total:", totalsX + 4, y + 7);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...NAVY);
-  doc.text(fmt(data.totalAmount, data.shop.currency), totalsX + totalsW - 4, y + 7, { align: "right" });
+  doc.text(
+    fmt(data.totalAmount, data.shop.currency),
+    totalsX + totalsW - 4,
+    y + 7,
+    { align: "right" },
+  );
 
   if (data.payments.length > 0) {
     // Paid
@@ -209,7 +227,12 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
     doc.text("Paid:", totalsX + 4, y + 15);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...GREEN);
-    doc.text(fmt(data.totalPaid, data.shop.currency), totalsX + totalsW - 4, y + 15, { align: "right" });
+    doc.text(
+      fmt(data.totalPaid, data.shop.currency),
+      totalsX + totalsW - 4,
+      y + 15,
+      { align: "right" },
+    );
 
     // Outstanding
     doc.setDrawColor(...GOLD);
@@ -218,15 +241,21 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.5);
-    const outstandingColor: [number, number, number] = data.outstanding > 0 ? [200, 100, 30] : [...GREEN];
+    const outstandingColor: [number, number, number] =
+      data.outstanding > 0 ? [200, 100, 30] : [...GREEN];
     doc.setTextColor(...outstandingColor);
     doc.text(
       data.outstanding > 0 ? "Balance Due:" : "Paid in Full",
       totalsX + 4,
-      y + 28
+      y + 28,
     );
     if (data.outstanding > 0) {
-      doc.text(fmt(data.outstanding, data.shop.currency), totalsX + totalsW - 4, y + 28, { align: "right" });
+      doc.text(
+        fmt(data.outstanding, data.shop.currency),
+        totalsX + totalsW - 4,
+        y + 28,
+        { align: "right" },
+      );
     }
 
     y += 42;
@@ -251,15 +280,26 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
         fmt(p.amount, data.shop.currency),
       ]),
       theme: "plain",
-      styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [60, 60, 60] as [number, number, number] },
-      headStyles: { fillColor: LIGHT_BG, textColor: NAVY, fontStyle: "bold", fontSize: 8 },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 2.5,
+        textColor: [60, 60, 60] as [number, number, number],
+      },
+      headStyles: {
+        fillColor: LIGHT_BG,
+        textColor: NAVY,
+        fontStyle: "bold",
+        fontSize: 8,
+      },
       columnStyles: {
         2: { halign: "right" },
       },
       margin: { left: margin, right: margin },
     });
 
-    y = ((doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY) + 6;
+    y =
+      (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+        .finalY + 6;
   }
 
   // ── Notes ─────────────────────────────────────────────────────────────────
@@ -267,7 +307,10 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8.5);
     doc.setTextColor(...GRAY);
-    const noteLines = doc.splitTextToSize(`Notes: ${data.notes}`, pageW - margin * 2);
+    const noteLines = doc.splitTextToSize(
+      `Notes: ${data.notes}`,
+      pageW - margin * 2,
+    );
     doc.text(noteLines, margin, y);
     y += noteLines.length * 5 + 4;
   }
@@ -280,7 +323,12 @@ export function generateInvoicePDF(data: InvoiceData): jsPDF {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...GRAY);
-  doc.text(`${data.shop.name} · Thank you for your business!`, pageW / 2, pageH - 9, { align: "center" });
+  doc.text(
+    `${data.shop.name} · Thank you for your business!`,
+    pageW / 2,
+    pageH - 9,
+    { align: "center" },
+  );
 
   return doc;
 }
@@ -302,9 +350,10 @@ export function getInvoicePDFDataUrl(data: InvoiceData): string {
 
 export function buildWhatsAppUrl(data: InvoiceData): string {
   const curr = data.shop.currency;
-  const outstanding = data.outstanding > 0
-    ? `\nBalance due: ${curr} ${data.outstanding.toLocaleString("en", { minimumFractionDigits: 2 })}`
-    : "\nPayment: Fully paid ✓";
+  const outstanding =
+    data.outstanding > 0
+      ? `\nBalance due: ${curr} ${data.outstanding.toLocaleString("en", { minimumFractionDigits: 2 })}`
+      : "\nPayment: Fully paid ✓";
 
   const message = [
     `Hello ${data.customer?.name ?? ""},`,

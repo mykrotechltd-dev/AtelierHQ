@@ -47,12 +47,17 @@ export default function Signup() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <Card className="w-full max-w-sm p-8 text-center">
-          <h1 className="font-sans text-xl font-semibold text-foreground">Check your email</h1>
+          <h1 className="font-sans text-xl font-semibold text-foreground">
+            Check your email
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come
-            back and sign in.
+            We sent a confirmation link to <strong>{email}</strong>. Click it to
+            activate your account, then come back and sign in.
           </p>
-          <Link to="/login" className="mt-6 inline-block text-sm font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            className="mt-6 inline-block text-sm font-medium text-primary hover:underline"
+          >
             Back to sign in
           </Link>
         </Card>
@@ -63,17 +68,32 @@ export default function Signup() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm gap-0 p-8">
-        <h1 className="font-sans text-2xl font-semibold text-foreground">Create your shop account</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Start managing orders, customers and payments today.</p>
+        <h1 className="font-sans text-2xl font-semibold text-foreground">
+          Create your shop account
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Start managing orders, customers and payments today.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <Label>Your name</Label>
-            <Input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1" />
+            <Input
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="mt-1"
+            />
           </div>
           <div>
             <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
+            <Input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1"
+            />
           </div>
           <div>
             <Label>Password</Label>
@@ -96,7 +116,10 @@ export default function Signup() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Already have a shop?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Sign in
           </Link>
         </p>

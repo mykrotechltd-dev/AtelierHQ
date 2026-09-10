@@ -24,11 +24,17 @@ export default function CustomersPage() {
   const [debouncedSearch] = useDebounce(search, 300);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { results, status, loadMore } = useCustomers(debouncedSearch || undefined, 20);
+  const { results, status, loadMore } = useCustomers(
+    debouncedSearch || undefined,
+    20,
+  );
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader title="Customers" description="Manage your client records and measurements.">
+      <PageHeader
+        title="Customers"
+        description="Manage your client records and measurements."
+      >
         <Button size="sm" onClick={() => setDialogOpen(true)}>
           Add customer
         </Button>
@@ -58,7 +64,9 @@ export default function CustomersPage() {
             <EmptyMedia variant="icon">
               <Users />
             </EmptyMedia>
-            <EmptyTitle>{debouncedSearch ? "No customers found" : "No customers yet"}</EmptyTitle>
+            <EmptyTitle>
+              {debouncedSearch ? "No customers found" : "No customers yet"}
+            </EmptyTitle>
             <EmptyDescription>
               {debouncedSearch
                 ? `No results for "${debouncedSearch}"`
@@ -81,7 +89,7 @@ export default function CustomersPage() {
               onClick={() => navigate(`/customers/${customer.id}`)}
               className={cn(
                 "w-full text-left rounded-lg border border-border bg-card px-4 py-3",
-                "hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                "hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer",
               )}
             >
               <div className="flex items-start justify-between gap-4">

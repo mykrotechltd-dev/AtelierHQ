@@ -89,7 +89,8 @@ export default function Index() {
             transition={{ delay: 0.4, duration: 0.6 }}
             className="font-body text-lg text-muted-foreground mb-10 leading-relaxed"
           >
-            Orders, customers, worker tasks, payments, and invoices — all in one elegant workspace for your tailoring business.
+            Orders, customers, worker tasks, payments, and invoices — all in one
+            elegant workspace for your tailoring business.
           </motion.p>
 
           <motion.div
@@ -101,7 +102,12 @@ export default function Index() {
             <Button asChild size="lg" className="px-10 py-3 text-base">
               <Link to="/signup">Get started</Link>
             </Button>
-            <Button asChild variant="outline" size="lg" className="px-10 py-3 text-base">
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="px-10 py-3 text-base"
+            >
               <Link to="/login">Sign in</Link>
             </Button>
           </motion.div>

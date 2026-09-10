@@ -12,16 +12,22 @@ export default function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 mb-6", className)}>
+    <div
+      className={cn("flex items-start justify-between gap-4 mb-6", className)}
+    >
       <div>
         <h1 className="font-sans text-2xl font-semibold text-foreground leading-tight">
           {title}
         </h1>
         {description && (
-          <p className="font-body text-sm text-muted-foreground mt-0.5">{description}</p>
+          <p className="font-body text-sm text-muted-foreground mt-0.5">
+            {description}
+          </p>
         )}
       </div>
-      {children && <div className="flex items-center gap-2 shrink-0">{children}</div>}
+      {children && (
+        <div className="flex items-center gap-2 shrink-0">{children}</div>
+      )}
     </div>
   );
 }

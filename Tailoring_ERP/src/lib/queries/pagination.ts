@@ -10,13 +10,16 @@ type PaginationStatus = "LoadingFirstPage" | "CanLoadMore" | "Exhausted";
 export function usePaginatedQuery<T>(
   queryKey: readonly unknown[],
   fetchPage: (offset: number, limit: number) => Promise<T[]>,
-  pageSize: number
+  pageSize: number,
 ): { results: T[]; status: PaginationStatus; loadMore: () => void } {
   const query = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam }) => {
       const items = await fetchPage(pageParam, pageSize);
-      return { items, nextOffset: items.length < pageSize ? null : pageParam + pageSize };
+      return {
+        items,
+        nextOffset: items.length < pageSize ? null : pageParam + pageSize,
+      };
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextOffset,

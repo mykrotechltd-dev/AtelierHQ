@@ -18,7 +18,10 @@ export default function Login() {
     setLoading(true);
     setError(null);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     setLoading(false);
     if (signInError) {
@@ -31,13 +34,23 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm gap-0 p-8">
-        <h1 className="font-sans text-2xl font-semibold text-foreground">Sign in to AtelierHQ</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Manage your shop's orders, measurements and payments.</p>
+        <h1 className="font-sans text-2xl font-semibold text-foreground">
+          Sign in to AtelierHQ
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your shop's orders, measurements and payments.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
+            <Input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1"
+            />
           </div>
           <div>
             <Label>Password</Label>
@@ -59,7 +72,10 @@ export default function Login() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           New shop?{" "}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
+          <Link
+            to="/signup"
+            className="font-medium text-primary hover:underline"
+          >
             Create an account
           </Link>
         </p>

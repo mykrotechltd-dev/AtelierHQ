@@ -13,7 +13,10 @@ import {
   useDeleteMaterial,
   type OrderItemWithMaterials,
 } from "@/lib/queries/orders.ts";
-import { usePaymentsByOrder, useDeletePayment } from "@/lib/queries/payments.ts";
+import {
+  usePaymentsByOrder,
+  useDeletePayment,
+} from "@/lib/queries/payments.ts";
 import { useOrderPaymentTrail } from "@/lib/queries/workers.ts";
 import type { Order, Measurements } from "@/lib/supabase/types.ts";
 import {
@@ -27,7 +30,12 @@ import { format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
 import RecordPaymentDialog from "../../payments/_components/record-payment-dialog.tsx";
 import PayoutDialog from "../../workers/_components/payout-dialog.tsx";
 import {
@@ -64,10 +72,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-import { StatusBadge, STATUS_CONFIG, type OrderStatus } from "../_components/status-badge.tsx";
-import { ArrowLeft, ArrowRight, Pencil, Trash2, Plus, User, CalendarDays, FileText, CreditCard, CheckCircle2, Banknote, AlertTriangle } from "lucide-react";
+import { StatusBadge } from "../_components/status-badge.tsx";
+import { STATUS_CONFIG, type OrderStatus } from "@/lib/order-status.ts";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Pencil,
+  Trash2,
+  Plus,
+  User,
+  CalendarDays,
+  FileText,
+  CreditCard,
+  CheckCircle2,
+  Banknote,
+  AlertTriangle,
+} from "lucide-react";
 import InvoiceActions from "../_components/invoice-actions.tsx";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
@@ -108,9 +130,16 @@ function ItemDialog({
   const updateMaterial = useUpdateMaterial();
   const deleteMaterial = useDeleteMaterial();
   const [saving, setSaving] = useState(false);
-  const [measurements, setMeasurements] = useState<Partial<Measurements>>(item?.measurements ?? {});
+  const [measurements, setMeasurements] = useState<Partial<Measurements>>(
+    item?.measurements ?? {},
+  );
   const [materials, setMaterials] = useState<MaterialLine[]>(
-    item?.materials.map((m) => ({ id: m.id, name: m.name, quantity: String(m.quantity), unitPrice: String(m.unitPrice) })) ?? []
+    item?.materials.map((m) => ({
+      id: m.id,
+      name: m.name,
+      quantity: String(m.quantity),
+      unitPrice: String(m.unitPrice),
+    })) ?? [],
   );
   const [removedMaterialIds, setRemovedMaterialIds] = useState<string[]>([]);
 
@@ -126,7 +155,7 @@ function ItemDialog({
     },
   });
 
-  const garmentType = form.watch("garmentType");
+  const garmentType = useWatch({ control: form.control, name: "garmentType" });
   const spec = measurementSpecForGarment(garmentType);
   const fields = spec ? [...spec.required, ...spec.optional] : [];
 
@@ -139,7 +168,10 @@ function ItemDialog({
       if (nextSpec) {
         const prefill: Partial<Measurements> = { ...measurements };
         for (const f of [...nextSpec.required, ...nextSpec.optional]) {
-          if (prefill[f] === undefined && customerMeasurements[f] !== undefined) {
+          if (
+            prefill[f] === undefined &&
+            customerMeasurements[f] !== undefined
+          ) {
             prefill[f] = customerMeasurements[f];
           }
         }
@@ -148,23 +180,37 @@ function ItemDialog({
     }
   };
 
-  const missingRequired = spec?.required.filter((f) => measurements[f] === undefined) ?? [];
+  const missingRequired =
+    spec?.required.filter((f) => measurements[f] === undefined) ?? [];
 
-  const addMaterialLine = () => setMaterials((prev) => [...prev, { name: "", quantity: "1", unitPrice: "" }]);
+  const addMaterialLine = () =>
+    setMaterials((prev) => [
+      ...prev,
+      { name: "", quantity: "1", unitPrice: "" },
+    ]);
   const updateMaterialLine = (index: number, patch: Partial<MaterialLine>) =>
-    setMaterials((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)));
+    setMaterials((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+    );
   const removeMaterialLine = (index: number) => {
     const line = materials[index];
     if (line.id) setRemovedMaterialIds((prev) => [...prev, line.id!]);
     setMaterials((prev) => prev.filter((_, i) => i !== index));
   };
-  const materialLineTotal = (m: MaterialLine) => (parseFloat(m.quantity) || 0) * (parseFloat(m.unitPrice) || 0);
-  const materialsSubtotal = materials.reduce((sum, m) => sum + materialLineTotal(m), 0);
+  const materialLineTotal = (m: MaterialLine) =>
+    (parseFloat(m.quantity) || 0) * (parseFloat(m.unitPrice) || 0);
+  const materialsSubtotal = materials.reduce(
+    (sum, m) => sum + materialLineTotal(m),
+    0,
+  );
 
   const onSubmit = async (values: ItemFormValues) => {
     setSaving(true);
     try {
-      const measurementsPayload = Object.keys(measurements).length > 0 ? (measurements as Measurements) : undefined;
+      const measurementsPayload =
+        Object.keys(measurements).length > 0
+          ? (measurements as Measurements)
+          : undefined;
       const payload = {
         description: values.description,
         garmentType: values.garmentType || undefined,
@@ -198,7 +244,11 @@ function ItemDialog({
         if (line.id) {
           await updateMaterial({ id: line.id, orderId, ...materialPayload });
         } else {
-          await addMaterial({ orderId, orderItemId: itemId, ...materialPayload });
+          await addMaterial({
+            orderId,
+            orderItemId: itemId,
+            ...materialPayload,
+          });
         }
       }
 
@@ -215,68 +265,119 @@ function ItemDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-sans">{item ? "Edit item" : "Add item"}</DialogTitle>
+          <DialogTitle className="font-sans">
+            {item ? "Edit item" : "Add item"}
+          </DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="description" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description *</FormLabel>
-                <FormControl><Input placeholder="e.g. Ankara Senator suit" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Ankara Senator suit" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-3">
-              <FormField control={form.control} name="garmentType" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Garment type</FormLabel>
-                  <Select onValueChange={handleGarmentTypeChange} value={field.value}>
+              <FormField
+                control={form.control}
+                name="garmentType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Garment type</FormLabel>
+                    <Select
+                      onValueChange={handleGarmentTypeChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {GARMENT_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="fabric"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Fabric</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
+                      <Input placeholder="Ankara, Silk…" {...field} />
                     </FormControl>
-                    <SelectContent>
-                      {GARMENT_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="fabric" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Fabric</FormLabel>
-                  <FormControl><Input placeholder="Ankara, Silk…" {...field} /></FormControl>
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="quantity" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Qty *</FormLabel>
-                  <FormControl><Input type="number" min="1" step="1" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="unitPrice" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Unit price *</FormLabel>
-                  <FormControl><Input type="number" min="0" step="0.01" placeholder="0.00" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Qty *</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1" step="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="unitPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Unit price *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            <FormField control={form.control} name="notes" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Notes</FormLabel>
-                <FormControl><Input placeholder="Special instructions…" {...field} /></FormControl>
-              </FormItem>
-            )} />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Special instructions…" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
             {/* Measurements — frozen snapshot for this garment */}
             {fields.length > 0 && (
               <div className="space-y-2 rounded-md border border-border p-3">
                 <p className="text-xs font-body font-medium text-muted-foreground uppercase tracking-wide">
-                  Measurements ({item ? "saved with this item" : "from customer profile — editable"})
+                  Measurements (
+                  {item
+                    ? "saved with this item"
+                    : "from customer profile — editable"}
+                  )
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {fields.map((f) => (
@@ -305,7 +406,10 @@ function ItemDialog({
                 {missingRequired.length > 0 && (
                   <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-body">
                     <AlertTriangle className="size-3.5" />
-                    Missing: {missingRequired.map((f) => MEASUREMENT_LABELS[f]).join(", ")}
+                    Missing:{" "}
+                    {missingRequired
+                      .map((f) => MEASUREMENT_LABELS[f])
+                      .join(", ")}
                   </p>
                 )}
               </div>
@@ -317,32 +421,58 @@ function ItemDialog({
                 <p className="text-xs font-body font-medium text-muted-foreground uppercase tracking-wide">
                   Materials
                 </p>
-                <Button type="button" size="sm" variant="secondary" onClick={addMaterialLine}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={addMaterialLine}
+                >
                   <Plus className="size-3 mr-1" /> Add material
                 </Button>
               </div>
               {materials.length === 0 ? (
-                <p className="text-xs text-muted-foreground font-body">No materials added.</p>
+                <p className="text-xs text-muted-foreground font-body">
+                  No materials added.
+                </p>
               ) : (
                 <div className="space-y-1.5">
                   {materials.map((m, i) => (
-                    <div key={m.id ?? `new-${i}`} className="grid grid-cols-[1fr_60px_80px_auto] gap-1.5 items-center">
+                    <div
+                      key={m.id ?? `new-${i}`}
+                      className="grid grid-cols-[1fr_60px_80px_auto] gap-1.5 items-center"
+                    >
                       <Input
                         placeholder="Buttons, lining…"
                         value={m.name}
-                        onChange={(e) => updateMaterialLine(i, { name: e.target.value })}
+                        onChange={(e) =>
+                          updateMaterialLine(i, { name: e.target.value })
+                        }
                       />
                       <Input
-                        type="number" min="0" step="0.01" placeholder="Qty"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Qty"
                         value={m.quantity}
-                        onChange={(e) => updateMaterialLine(i, { quantity: e.target.value })}
+                        onChange={(e) =>
+                          updateMaterialLine(i, { quantity: e.target.value })
+                        }
                       />
                       <Input
-                        type="number" min="0" step="0.01" placeholder="Price"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Price"
                         value={m.unitPrice}
-                        onChange={(e) => updateMaterialLine(i, { unitPrice: e.target.value })}
+                        onChange={(e) =>
+                          updateMaterialLine(i, { unitPrice: e.target.value })
+                        }
                       />
-                      <button type="button" onClick={() => removeMaterialLine(i)} className="text-destructive hover:text-destructive/80 cursor-pointer justify-self-center">
+                      <button
+                        type="button"
+                        onClick={() => removeMaterialLine(i)}
+                        className="text-destructive hover:text-destructive/80 cursor-pointer justify-self-center"
+                      >
                         <Trash2 className="size-3.5" />
                       </button>
                     </div>
@@ -351,7 +481,9 @@ function ItemDialog({
                     <span className="text-xs font-body text-muted-foreground">
                       Materials subtotal:{" "}
                       <span className="font-medium text-foreground">
-                        {materialsSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {materialsSubtotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </span>
                     </span>
                   </div>
@@ -360,8 +492,12 @@ function ItemDialog({
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? "Saving…" : item ? "Save changes" : "Add item"}</Button>
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : item ? "Save changes" : "Add item"}
+              </Button>
             </div>
           </form>
         </Form>
@@ -396,34 +532,59 @@ function EditOrderDialog({
   const onSubmit = async (values: EditFormValues) => {
     setSaving(true);
     try {
-      await updateOrder({ id: order.id, dueDate: values.dueDate || undefined, notes: values.notes || undefined });
+      await updateOrder({
+        id: order.id,
+        dueDate: values.dueDate || undefined,
+        notes: values.notes || undefined,
+      });
       toast.success("Order updated");
       onClose();
-    } catch { toast.error("Failed to update order"); }
-    finally { setSaving(false); }
+    } catch {
+      toast.error("Failed to update order");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="font-sans">Edit order</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="font-sans">Edit order</DialogTitle>
+        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="dueDate" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due date</FormLabel>
-                <FormControl><Input type="date" {...field} /></FormControl>
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="notes" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Notes</FormLabel>
-                <FormControl><Textarea rows={3} {...field} /></FormControl>
-              </FormItem>
-            )} />
+            <FormField
+              control={form.control}
+              name="dueDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Due date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea rows={3} {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
             </div>
           </form>
         </Form>
@@ -437,7 +598,9 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<OrderItemWithMaterials | undefined>(undefined);
+  const [editingItem, setEditingItem] = useState<
+    OrderItemWithMaterials | undefined
+  >(undefined);
   const [editOrderOpen, setEditOrderOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
@@ -456,14 +619,18 @@ export default function OrderDetailPage() {
     try {
       await advanceStatus({ id });
       toast.success("Status updated");
-    } catch { toast.error("Could not update status"); }
+    } catch {
+      toast.error("Could not update status");
+    }
   };
 
   const handleDeleteItem = async (itemId: string) => {
     try {
       await deleteItem({ id: itemId });
       toast.success("Item removed");
-    } catch { toast.error("Failed to remove item"); }
+    } catch {
+      toast.error("Failed to remove item");
+    }
   };
 
   const handleDeleteOrder = async () => {
@@ -472,7 +639,9 @@ export default function OrderDetailPage() {
       await deleteOrder({ id });
       toast.success("Order deleted");
       navigate("/orders", { replace: true });
-    } catch { toast.error("Failed to delete order"); }
+    } catch {
+      toast.error("Failed to delete order");
+    }
   };
 
   if (!order) {
@@ -498,7 +667,11 @@ export default function OrderDetailPage() {
 
       <PageHeader title={order.orderNumber}>
         <InvoiceActions orderId={id as string} />
-        <Button size="sm" variant="secondary" onClick={() => setEditOrderOpen(true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setEditOrderOpen(true)}
+        >
           <Pencil className="size-3.5 mr-1" /> Edit
         </Button>
         {statusCfg.nextLabel && (
@@ -508,18 +681,26 @@ export default function OrderDetailPage() {
         )}
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive"><Trash2 className="size-3.5" /></Button>
+            <Button size="sm" variant="destructive">
+              <Trash2 className="size-3.5" />
+            </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete order {order.orderNumber}?</AlertDialogTitle>
+              <AlertDialogTitle>
+                Delete order {order.orderNumber}?
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                This permanently deletes the order and all its items. This cannot be undone.
+                This permanently deletes the order and all its items. This
+                cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-white hover:bg-destructive/90">
+              <AlertDialogAction
+                onClick={handleDeleteOrder}
+                className="bg-destructive text-white hover:bg-destructive/90"
+              >
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -532,12 +713,16 @@ export default function OrderDetailPage() {
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-4 items-start">
             <div>
-              <p className="text-xs text-muted-foreground font-body mb-1">Status</p>
+              <p className="text-xs text-muted-foreground font-body mb-1">
+                Status
+              </p>
               <StatusBadge status={order.status} />
             </div>
             {order.customer && (
               <div>
-                <p className="text-xs text-muted-foreground font-body mb-1">Customer</p>
+                <p className="text-xs text-muted-foreground font-body mb-1">
+                  Customer
+                </p>
                 <button
                   onClick={() => navigate(`/customers/${order.customer!.id}`)}
                   className="flex items-center gap-1 text-sm font-body text-primary hover:underline cursor-pointer"
@@ -548,7 +733,9 @@ export default function OrderDetailPage() {
             )}
             {order.dueDate && (
               <div>
-                <p className="text-xs text-muted-foreground font-body mb-1">Due</p>
+                <p className="text-xs text-muted-foreground font-body mb-1">
+                  Due
+                </p>
                 <span className="flex items-center gap-1 text-sm font-body">
                   <CalendarDays className="size-3.5 text-muted-foreground" />
                   {format(parseISO(order.dueDate), "dd MMM yyyy")}
@@ -556,16 +743,22 @@ export default function OrderDetailPage() {
               </div>
             )}
             <div>
-              <p className="text-xs text-muted-foreground font-body mb-1">Total</p>
+              <p className="text-xs text-muted-foreground font-body mb-1">
+                Total
+              </p>
               <span className="font-sans font-semibold text-base">
-                {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {order.totalAmount.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
           </div>
           {order.notes && (
             <div className="flex items-start gap-2 mt-3 pt-3 border-t border-border">
               <FileText className="size-4 text-muted-foreground mt-0.5 shrink-0" />
-              <p className="text-sm text-muted-foreground font-body">{order.notes}</p>
+              <p className="text-sm text-muted-foreground font-body">
+                {order.notes}
+              </p>
             </div>
           )}
         </CardContent>
@@ -581,7 +774,10 @@ export default function OrderDetailPage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => { setEditingItem(undefined); setItemDialogOpen(true); }}
+              onClick={() => {
+                setEditingItem(undefined);
+                setItemDialogOpen(true);
+              }}
             >
               <Plus className="size-3.5 mr-1" /> Add item
             </Button>
@@ -589,7 +785,9 @@ export default function OrderDetailPage() {
         </CardHeader>
         <CardContent className="space-y-2">
           {order.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground font-body">No items yet — add one above.</p>
+            <p className="text-sm text-muted-foreground font-body">
+              No items yet — add one above.
+            </p>
           ) : (
             order.items.map((item) => (
               <div
@@ -597,33 +795,53 @@ export default function OrderDetailPage() {
                 className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-body text-sm font-medium text-foreground truncate">{item.description}</p>
+                  <p className="font-body text-sm font-medium text-foreground truncate">
+                    {item.description}
+                  </p>
                   <div className="flex flex-wrap gap-x-3 mt-0.5">
                     {item.garmentType && (
-                      <span className="text-xs text-muted-foreground font-body">{item.garmentType}</span>
+                      <span className="text-xs text-muted-foreground font-body">
+                        {item.garmentType}
+                      </span>
                     )}
                     {item.fabric && (
-                      <span className="text-xs text-muted-foreground font-body">{item.fabric}</span>
+                      <span className="text-xs text-muted-foreground font-body">
+                        {item.fabric}
+                      </span>
                     )}
                     <span className="text-xs text-muted-foreground font-body">
-                      Qty: {item.quantity} × {item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      Qty: {item.quantity} ×{" "}
+                      {item.unitPrice.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
                     </span>
                     {item.materialCostTotal > 0 && (
                       <span className="text-xs text-muted-foreground font-body">
-                        Materials: {item.materialCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        Materials:{" "}
+                        {item.materialCostTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </span>
                     )}
                   </div>
                   {item.notes && (
-                    <p className="text-xs text-muted-foreground font-body mt-0.5 italic">{item.notes}</p>
+                    <p className="text-xs text-muted-foreground font-body mt-0.5 italic">
+                      {item.notes}
+                    </p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="font-sans font-semibold text-sm">
-                    {(item.quantity * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {(item.quantity * item.unitPrice).toLocaleString(
+                      undefined,
+                      { minimumFractionDigits: 2 },
+                    )}
                   </span>
                   <button
-                    onClick={() => { setEditingItem(item); setItemDialogOpen(true); }}
+                    onClick={() => {
+                      setEditingItem(item);
+                      setItemDialogOpen(true);
+                    }}
                     className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     <Pencil className="size-3.5" />
@@ -661,9 +879,13 @@ export default function OrderDetailPage() {
           {order.items.length > 0 && (
             <div className="flex justify-end pt-2 border-t border-border">
               <div className="text-right">
-                <p className="text-xs text-muted-foreground font-body">Order total</p>
+                <p className="text-xs text-muted-foreground font-body">
+                  Order total
+                </p>
                 <p className="font-sans font-bold text-lg">
-                  {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {order.totalAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </div>
@@ -678,7 +900,11 @@ export default function OrderDetailPage() {
             <CardTitle className="font-sans text-sm text-muted-foreground uppercase tracking-wide">
               Job Costing
             </CardTitle>
-            <Button size="sm" variant="secondary" onClick={() => setPayoutDialogOpen(true)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setPayoutDialogOpen(true)}
+            >
               <Banknote className="size-3.5 mr-1" /> Record worker payment
             </Button>
           </div>
@@ -688,44 +914,69 @@ export default function OrderDetailPage() {
             <Skeleton className="h-16 w-full" />
           ) : (
             (() => {
-              const jobCostTotal = paymentTrail.reduce((sum, p) => sum + p.amount, 0);
+              const jobCostTotal = paymentTrail.reduce(
+                (sum, p) => sum + p.amount,
+                0,
+              );
               const materialCostTotal = order.materialCostTotal;
-              const jobMargin = order.totalAmount - jobCostTotal - materialCostTotal;
+              const jobMargin =
+                order.totalAmount - jobCostTotal - materialCostTotal;
               return (
                 <>
                   <div className="flex flex-wrap gap-4 rounded-md bg-muted px-4 py-3">
                     <div>
-                      <p className="text-xs font-body text-muted-foreground">Job cost (worker payments)</p>
+                      <p className="text-xs font-body text-muted-foreground">
+                        Job cost (worker payments)
+                      </p>
                       <p className="font-sans font-semibold text-sm">
-                        {jobCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {jobCostTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-body text-muted-foreground">Material cost</p>
+                      <p className="text-xs font-body text-muted-foreground">
+                        Material cost
+                      </p>
                       <p className="font-sans font-semibold text-sm">
-                        {materialCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {materialCostTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-body text-muted-foreground">Job margin</p>
-                      <p className={`font-sans font-semibold text-sm ${jobMargin < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                        {jobMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <p className="text-xs font-body text-muted-foreground">
+                        Job margin
+                      </p>
+                      <p
+                        className={`font-sans font-semibold text-sm ${jobMargin < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                      >
+                        {jobMargin.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </p>
                     </div>
                   </div>
 
                   {/* Payment trail */}
                   {paymentTrail.length === 0 ? (
-                    <p className="text-sm text-muted-foreground font-body">No worker payments recorded against this order yet.</p>
+                    <p className="text-sm text-muted-foreground font-body">
+                      No worker payments recorded against this order yet.
+                    </p>
                   ) : (
                     <div className="space-y-1.5">
                       {paymentTrail.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                        >
                           <div className="flex items-center gap-3">
                             <span className="text-xs font-body text-muted-foreground">
                               {format(parseISO(p.paidAt), "dd MMM yyyy")}
                             </span>
-                            <span className="text-xs font-body font-medium">{p.workerName}</span>
+                            <span className="text-xs font-body font-medium">
+                              {p.workerName}
+                            </span>
                             {p.notes && (
                               <span className="text-xs font-body text-muted-foreground italic truncate max-w-[180px]">
                                 {p.notes}
@@ -733,7 +984,9 @@ export default function OrderDetailPage() {
                             )}
                           </div>
                           <span className="font-sans font-semibold text-sm">
-                            {p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {p.amount.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                            })}
                           </span>
                         </div>
                       ))}
@@ -772,27 +1025,43 @@ export default function OrderDetailPage() {
               {/* Balance summary row */}
               <div className="flex flex-wrap gap-4 rounded-md bg-muted px-4 py-3">
                 <div>
-                  <p className="text-xs font-body text-muted-foreground">Order total</p>
+                  <p className="text-xs font-body text-muted-foreground">
+                    Order total
+                  </p>
                   <p className="font-sans font-semibold text-sm">
-                    {paymentSummary.orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {paymentSummary.orderTotal.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-body text-muted-foreground">Paid</p>
+                  <p className="text-xs font-body text-muted-foreground">
+                    Paid
+                  </p>
                   <p className="font-sans font-semibold text-sm text-emerald-600 dark:text-emerald-400">
-                    {paymentSummary.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {paymentSummary.totalPaid.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-body text-muted-foreground">Outstanding</p>
-                  <p className={`font-sans font-semibold text-sm ${paymentSummary.outstanding > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                    {paymentSummary.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <p className="text-xs font-body text-muted-foreground">
+                    Outstanding
+                  </p>
+                  <p
+                    className={`font-sans font-semibold text-sm ${paymentSummary.outstanding > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                  >
+                    {paymentSummary.outstanding.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
                 {paymentSummary.outstanding === 0 && (
                   <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="size-4" />
-                    <span className="text-xs font-body font-medium">Fully paid</span>
+                    <span className="text-xs font-body font-medium">
+                      Fully paid
+                    </span>
                   </div>
                 )}
               </div>
@@ -830,7 +1099,10 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="font-sans font-semibold text-sm text-emerald-600 dark:text-emerald-400">
-                          +{p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          +
+                          {p.amount.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                          })}
                         </span>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -840,11 +1112,15 @@ export default function OrderDetailPage() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete payment?</AlertDialogTitle>
+                              <AlertDialogTitle>
+                                Delete payment?
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
                                 Remove this payment of{" "}
-                                {p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}?
-                                This cannot be undone.
+                                {p.amount.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                })}
+                                ? This cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -870,7 +1146,10 @@ export default function OrderDetailPage() {
 
       <ItemDialog
         open={itemDialogOpen}
-        onClose={() => { setItemDialogOpen(false); setEditingItem(undefined); }}
+        onClose={() => {
+          setItemDialogOpen(false);
+          setEditingItem(undefined);
+        }}
         orderId={id as string}
         item={editingItem}
         customerMeasurements={order.customer?.measurements ?? null}

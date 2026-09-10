@@ -1,11 +1,21 @@
 import { useState } from "react";
-import { useMyTenant, useUpdateTenant, useFincraSettings, useSetFincraSettings } from "@/lib/queries/tenants.ts";
+import {
+  useMyTenant,
+  useUpdateTenant,
+  useFincraSettings,
+  useSetFincraSettings,
+} from "@/lib/queries/tenants.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import {
@@ -28,7 +38,16 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { CreditCard, CheckCircle2 } from "lucide-react";
 
 const CURRENCIES = [
-  "USD","NGN","GBP","EUR","GHS","KES","ZAR","INR","CAD","AUD",
+  "USD",
+  "NGN",
+  "GBP",
+  "EUR",
+  "GHS",
+  "KES",
+  "ZAR",
+  "INR",
+  "CAD",
+  "AUD",
 ];
 
 const schema = z.object({
@@ -84,18 +103,25 @@ export default function SettingsPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="font-sans text-lg">Shop Information</CardTitle>
+            <CardTitle className="font-sans text-lg">
+              Shop Information
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-4"
+              >
                 <FormField
                   control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Shop name</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -106,13 +132,20 @@ export default function SettingsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Currency</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {CURRENCIES.map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -126,7 +159,9 @@ export default function SettingsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -137,7 +172,9 @@ export default function SettingsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Address</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -170,7 +207,13 @@ function FincraCard() {
 
   const form = useForm<FincraFormValues>({
     resolver: zodResolver(fincraSchema),
-    defaultValues: { businessId: "", publicKey: "", secretKey: "", webhookSecret: "", isLive: false },
+    defaultValues: {
+      businessId: "",
+      publicKey: "",
+      secretKey: "",
+      webhookSecret: "",
+      isLive: false,
+    },
   });
 
   const onSubmit = async (values: FincraFormValues) => {
@@ -201,65 +244,114 @@ function FincraCard() {
           <>
             <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="size-4" />
-              <span className="text-sm font-body font-medium">Connected and accepting card payments</span>
+              <span className="text-sm font-body font-medium">
+                Connected and accepting card payments
+              </span>
             </div>
             <p className="text-xs text-muted-foreground font-body">
-              Business ID: {fincraSettings.businessId} · Mode: {fincraSettings.isLive ? "Live" : "Sandbox"}
+              Business ID: {fincraSettings.businessId} · Mode:{" "}
+              {fincraSettings.isLive ? "Live" : "Sandbox"}
             </p>
-            <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setEditing(true)}
+            >
               Update credentials
             </Button>
           </>
         ) : (
           <>
             <p className="text-sm text-muted-foreground font-body">
-              Connect your own Fincra business account to accept card payments — sign up at fincra.com if
-              you haven't already, then paste your credentials from the Fincra dashboard below.
+              Connect your own Fincra business account to accept card payments —
+              sign up at fincra.com if you haven't already, then paste your
+              credentials from the Fincra dashboard below.
             </p>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-                <FormField control={form.control} name="businessId" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Business ID</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="publicKey" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Public key</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="secretKey" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Secret key</FormLabel>
-                    <FormControl><Input type="password" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="webhookSecret" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Webhook secret</FormLabel>
-                    <FormControl><Input type="password" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="isLive" render={({ field }) => (
-                  <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
-                    </FormControl>
-                    <FormLabel className="text-xs font-normal">Live mode (uncheck for sandbox/test keys)</FormLabel>
-                  </FormItem>
-                )} />
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-3"
+              >
+                <FormField
+                  control={form.control}
+                  name="businessId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Business ID</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="publicKey"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Public key</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="secretKey"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Secret key</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="webhookSecret"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Webhook secret</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isLive"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(v) => field.onChange(v === true)}
+                        />
+                      </FormControl>
+                      <FormLabel className="text-xs font-normal">
+                        Live mode (uncheck for sandbox/test keys)
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
                 <div className="flex gap-2">
                   <Button type="submit" size="sm" disabled={saving}>
                     {saving ? "Saving..." : "Save credentials"}
                   </Button>
                   {fincraSettings?.connected && (
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(false)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setEditing(false)}
+                    >
                       Cancel
                     </Button>
                   )}

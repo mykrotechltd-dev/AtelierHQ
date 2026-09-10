@@ -3,9 +3,11 @@
 // the app-facing types below (camelCase) are what components consume —
 // src/lib/queries/* maps between the two.
 
-export type OrderStatus = "received" | "in_progress" | "completed" | "delivered";
+export type OrderStatus =
+  "received" | "in_progress" | "completed" | "delivered";
 export type TaskStatus = "pending" | "in_progress" | "done";
-export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other" | "stripe" | "fincra";
+export type PaymentMethod =
+  "cash" | "bank_transfer" | "card" | "other" | "stripe" | "fincra";
 export type UserRole = "owner" | "worker";
 
 export interface Measurements {
@@ -36,7 +38,9 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["tenants"]["Row"]> & { name: string };
+        Insert: Partial<Database["public"]["Tables"]["tenants"]["Row"]> & {
+          name: string;
+        };
         Update: Partial<Database["public"]["Tables"]["tenants"]["Row"]>;
       };
       profiles: {
@@ -48,7 +52,10 @@ export interface Database {
           role: UserRole;
           created_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & { id: string; tenant_id: string };
+        Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & {
+          id: string;
+          tenant_id: string;
+        };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Row"]>;
       };
       customers: {
@@ -63,7 +70,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["customers"]["Row"]> & { tenant_id: string; name: string };
+        Insert: Partial<Database["public"]["Tables"]["customers"]["Row"]> & {
+          tenant_id: string;
+          name: string;
+        };
         Update: Partial<Database["public"]["Tables"]["customers"]["Row"]>;
       };
       workers: {
@@ -77,7 +87,10 @@ export interface Database {
           is_active: boolean;
           created_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["workers"]["Row"]> & { tenant_id: string; name: string };
+        Insert: Partial<Database["public"]["Tables"]["workers"]["Row"]> & {
+          tenant_id: string;
+          name: string;
+        };
         Update: Partial<Database["public"]["Tables"]["workers"]["Row"]>;
       };
       orders: {
@@ -93,7 +106,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["orders"]["Row"]> & { tenant_id: string; customer_id: string };
+        Insert: Partial<Database["public"]["Tables"]["orders"]["Row"]> & {
+          tenant_id: string;
+          customer_id: string;
+        };
         Update: Partial<Database["public"]["Tables"]["orders"]["Row"]>;
       };
       order_items: {
@@ -128,7 +144,9 @@ export interface Database {
           line_total: number;
           created_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["order_materials"]["Row"]> & {
+        Insert: Partial<
+          Database["public"]["Tables"]["order_materials"]["Row"]
+        > & {
           tenant_id: string;
           order_item_id: string;
           name: string;
@@ -190,7 +208,9 @@ export interface Database {
           notes: string | null;
           paid_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["worker_payouts"]["Row"]> & {
+        Insert: Partial<
+          Database["public"]["Tables"]["worker_payouts"]["Row"]
+        > & {
           tenant_id: string;
           worker_id: string;
           amount: number;

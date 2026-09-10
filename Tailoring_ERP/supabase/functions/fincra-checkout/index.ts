@@ -42,7 +42,8 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 function json(body: unknown, status = 200) {
@@ -64,7 +65,11 @@ async function getCallerTenant(req: Request) {
     .single();
   if (!profile) return null;
 
-  const { data: tenant } = await admin.from("tenants").select("*").eq("id", profile.tenant_id).single();
+  const { data: tenant } = await admin
+    .from("tenants")
+    .select("*")
+    .eq("id", profile.tenant_id)
+    .single();
   if (!tenant) return null;
 
   return { tenant };
@@ -72,9 +77,17 @@ async function getCallerTenant(req: Request) {
 
 async function hmacSha512Hex(secret: string, message: string): Promise<string> {
   const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-512" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-512" },
+    false,
+    ["sign"],
+  );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -93,10 +106,15 @@ async function handleInitiate(req: Request) {
     .select("*")
     .eq("tenant_id", caller.tenant.id)
     .maybeSingle();
-  if (!settings) return json({ error: "Fincra is not connected for this shop" }, 400);
+  if (!settings)
+    return json({ error: "Fincra is not connected for this shop" }, 400);
 
-  const { orderId, amount } = (await req.json()) as { orderId: string; amount: number };
-  if (!orderId || !(amount > 0)) return json({ error: "Invalid order or amount" }, 400);
+  const { orderId, amount } = (await req.json()) as {
+    orderId: string;
+    amount: number;
+  };
+  if (!orderId || !(amount > 0))
+    return json({ error: "Invalid order or amount" }, 400);
 
   const { data: order, error: orderError } = await admin
     .from("orders")
@@ -106,20 +124,42 @@ async function handleInitiate(req: Request) {
     .single();
   if (orderError || !order) return json({ error: "Order not found" }, 404);
 
-  const customer = order.customers as { name: string; email: string | null } | null;
+  const customer = order.customers as {
+    name: string;
+    email: string | null;
+  } | null;
   if (!customer?.email) {
-    return json({ error: "This customer has no email on file — add one before taking a card payment." }, 400);
+    return json(
+      {
+        error:
+          "This customer has no email on file — add one before taking a card payment.",
+      },
+      400,
+    );
   }
 
-  const { data: existingPayments } = await admin.from("payments").select("amount").eq("order_id", orderId);
-  const alreadyPaid = (existingPayments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+  const { data: existingPayments } = await admin
+    .from("payments")
+    .select("amount")
+    .eq("order_id", orderId);
+  const alreadyPaid = (existingPayments ?? []).reduce(
+    (sum, p) => sum + Number(p.amount),
+    0,
+  );
   const outstanding = Number(order.total_amount) - alreadyPaid;
   if (amount > outstanding) {
-    return json({ error: `Amount would exceed the order total. Outstanding: ${outstanding}.` }, 400);
+    return json(
+      {
+        error: `Amount would exceed the order total. Outstanding: ${outstanding}.`,
+      },
+      400,
+    );
   }
 
   const reference = `order-${orderId}-${crypto.randomUUID()}`;
-  const baseUrl = settings.is_live ? "https://api.fincra.com" : "https://sandboxapi.fincra.com";
+  const baseUrl = settings.is_live
+    ? "https://api.fincra.com"
+    : "https://sandboxapi.fincra.com";
 
   const fincraRes = await fetch(`${baseUrl}/checkout/payments`, {
     method: "POST",
@@ -142,7 +182,10 @@ async function handleInitiate(req: Request) {
   const fincraBody = await fincraRes.json();
   if (!fincraRes.ok || !fincraBody?.data?.link) {
     console.error("Fincra initiate failed", fincraBody);
-    return json({ error: fincraBody?.message ?? "Fincra checkout could not be created" }, 502);
+    return json(
+      { error: fincraBody?.message ?? "Fincra checkout could not be created" },
+      502,
+    );
   }
 
   return json({ url: fincraBody.data.link });
@@ -164,7 +207,11 @@ async function handleWebhook(req: Request) {
   const orderId = reference?.match(/^order-([0-9a-fA-F-]{36})-/)?.[1];
   if (!orderId) return json({ received: true }); // not a reference we generated — ignore
 
-  const { data: order } = await admin.from("orders").select("id, tenant_id, customer_id").eq("id", orderId).maybeSingle();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, tenant_id, customer_id")
+    .eq("id", orderId)
+    .maybeSingle();
   if (!order) return json({ received: true });
 
   const { data: settings } = await admin
@@ -174,13 +221,20 @@ async function handleWebhook(req: Request) {
     .maybeSingle();
   if (!settings) return json({ received: true });
 
-  const expectedSignature = await hmacSha512Hex(settings.webhook_secret, rawBody);
+  const expectedSignature = await hmacSha512Hex(
+    settings.webhook_secret,
+    rawBody,
+  );
   if (!safeEqual(expectedSignature, signature)) {
     return new Response("Invalid signature", { status: 400 });
   }
 
-  if (payload.event === "charge.successful" && payload.data?.status === "success") {
-    const externalReference = (payload.data.chargeReference as string | undefined) ?? reference!;
+  if (
+    payload.event === "charge.successful" &&
+    payload.data?.status === "success"
+  ) {
+    const externalReference =
+      (payload.data.chargeReference as string | undefined) ?? reference!;
 
     const { data: existing } = await admin
       .from("payments")
@@ -207,7 +261,8 @@ async function handleWebhook(req: Request) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   const path = new URL(req.url).pathname;
   try {
@@ -216,6 +271,9 @@ Deno.serve(async (req) => {
     return json({ error: "Not found" }, 404);
   } catch (err) {
     console.error(err);
-    return json({ error: err instanceof Error ? err.message : "Internal error" }, 500);
+    return json(
+      { error: err instanceof Error ? err.message : "Internal error" },
+      500,
+    );
   }
 });

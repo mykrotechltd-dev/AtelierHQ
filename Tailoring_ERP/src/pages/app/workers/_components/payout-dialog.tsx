@@ -146,7 +146,13 @@ export default function PayoutDialog({
                 <FormItem>
                   <FormLabel>Amount *</FormLabel>
                   <FormControl>
-                    <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -159,7 +165,11 @@ export default function PayoutDialog({
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="e.g. Week of 10 Jun payment" {...field} />
+                    <Textarea
+                      rows={2}
+                      placeholder="e.g. Week of 10 Jun payment"
+                      {...field}
+                    />
                   </FormControl>
                 </FormItem>
               )}

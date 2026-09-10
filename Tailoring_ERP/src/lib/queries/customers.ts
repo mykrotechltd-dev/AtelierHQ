@@ -29,15 +29,21 @@ export function useCustomers(search: string | undefined, pageSize = 20) {
       if (error) throw error;
       return (data ?? []).map(mapCustomer);
     },
-    pageSize
+    pageSize,
   );
 }
 
-export function useCustomer(id: string | undefined): Customer | null | undefined {
+export function useCustomer(
+  id: string | undefined,
+): Customer | null | undefined {
   const query = useQuery({
     queryKey: ["customer", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("customers").select("*").eq("id", id!).single();
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("id", id!)
+        .single();
       if (error) throw error;
       return mapCustomer(data);
     },
@@ -88,7 +94,10 @@ export function useUpdateCustomer() {
       measurements?: Measurements;
     }) => {
       const { id, ...updates } = input;
-      const { error } = await supabase.from("customers").update(updates).eq("id", id);
+      const { error } = await supabase
+        .from("customers")
+        .update(updates)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {
@@ -103,7 +112,10 @@ export function useDeleteCustomer() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { error } = await supabase.from("customers").delete().eq("id", input.id);
+      const { error } = await supabase
+        .from("customers")
+        .delete()
+        .eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),

@@ -13,7 +13,8 @@ import {
   EmptyContent,
 } from "@/components/ui/empty.tsx";
 import { ClipboardList, CalendarDays, User } from "lucide-react";
-import { StatusBadge, STATUS_CONFIG, type OrderStatus } from "./_components/status-badge.tsx";
+import { StatusBadge } from "./_components/status-badge.tsx";
+import { STATUS_CONFIG, type OrderStatus } from "@/lib/order-status.ts";
 import CreateOrderDialog from "./_components/create-order-dialog.tsx";
 import { cn } from "@/lib/utils.ts";
 import { format, parseISO } from "date-fns";
@@ -29,13 +30,18 @@ const STATUS_TABS = [
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(
+    undefined,
+  );
 
   const { results, status, loadMore } = useOrders(statusFilter, 20);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader title="Orders" description="Track orders from received to delivered.">
+      <PageHeader
+        title="Orders"
+        description="Track orders from received to delivered."
+      >
         <Button size="sm" onClick={() => setDialogOpen(true)}>
           New order
         </Button>
@@ -46,12 +52,14 @@ export default function OrdersPage() {
         {STATUS_TABS.map((tab) => (
           <button
             key={String(tab.value)}
-            onClick={() => setStatusFilter(tab.value as OrderStatus | undefined)}
+            onClick={() =>
+              setStatusFilter(tab.value as OrderStatus | undefined)
+            }
             className={cn(
               "px-3 py-1.5 rounded-md text-xs font-body whitespace-nowrap transition-colors cursor-pointer",
               statusFilter === tab.value
                 ? "bg-primary text-primary-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
           >
             {tab.label}
@@ -73,10 +81,14 @@ export default function OrdersPage() {
               <ClipboardList />
             </EmptyMedia>
             <EmptyTitle>
-              {statusFilter ? `No ${STATUS_CONFIG[statusFilter].label.toLowerCase()} orders` : "No orders yet"}
+              {statusFilter
+                ? `No ${STATUS_CONFIG[statusFilter].label.toLowerCase()} orders`
+                : "No orders yet"}
             </EmptyTitle>
             <EmptyDescription>
-              {statusFilter ? "Try a different status filter" : "Create your first order to get started"}
+              {statusFilter
+                ? "Try a different status filter"
+                : "Create your first order to get started"}
             </EmptyDescription>
           </EmptyHeader>
           {!statusFilter && (
@@ -95,7 +107,7 @@ export default function OrdersPage() {
               onClick={() => navigate(`/orders/${order.id}`)}
               className={cn(
                 "w-full text-left rounded-lg border border-border bg-card px-4 py-3",
-                "hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                "hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer",
               )}
             >
               <div className="flex items-start justify-between gap-3">
@@ -119,7 +131,9 @@ export default function OrdersPage() {
                   </div>
                 </div>
                 <p className="font-sans font-semibold text-sm text-foreground shrink-0">
-                  {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {order.totalAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </button>
@@ -135,7 +149,10 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <CreateOrderDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <CreateOrderDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+      />
     </div>
   );
 }
