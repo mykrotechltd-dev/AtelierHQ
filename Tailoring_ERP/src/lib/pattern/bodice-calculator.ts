@@ -5,14 +5,15 @@
  * — a term-for-term port there of two Adobe Illustrator ExtendScript files,
  * `NewFront-bodice.jsx` (the "Lety Antony" method) and `NewBack_bodice.jsx`.
  * Every point below carries a comment naming the PatternLab point/variable it
- * replaces. Two coordinate changes were needed to bring the source's formulas
+ * replaces. One coordinate change was needed to bring the source's formulas
  * into this engine's convention, applied once at the very end of each panel's
  * point set (search `flip` below), never mid-formula:
  *
  *   - Units: the source works in inches, scaled ×72 ("PT") purely for its own
- *     SVG canvas — that scale is dropped entirely, and the underlying inch
- *     value is converted ×2.54 to centimetres instead (see `IN` in
- *     constants.ts, applied when each PatternLab constant was transcribed).
+ *     SVG canvas — that scale is dropped entirely and the underlying inch
+ *     value is used as-is, since this engine's own native unit is inches too
+ *     (see `constants.ts`'s `BODICE` object, transcribed directly with no
+ *     conversion factor).
  *   - Coordinates: the source is Y-up with negative-x toward the shoulder/
  *     side (an inherited Illustrator-scripting convention — it flips for its
  *     own display too, see its `flip()`). This engine is Y-down with
@@ -26,7 +27,7 @@
  * exported, graded, or asserted against reference values.
  */
 
-import { BODICE, BODY } from "./constants.ts";
+import { BODICE, BODY, SHOULDER_CROSS_THRESHOLD } from "./constants.ts";
 import {
   angleBetween,
   distance,
@@ -66,7 +67,7 @@ export type BodiceDraft = {
     sideSeamLength: number;
   };
 
-  /** Named drafting values, all cm. */
+  /** Named drafting values, all inches. */
   calc: {
     neckWidth: number;
     armholeEase: number;
@@ -136,7 +137,7 @@ export type BodiceDraft = {
 export function calculateBodice(
   m: Measurements,
   panel: PanelSide,
-  opts: BlockOptions = {}
+  opts: BlockOptions = {},
 ): BodiceDraft {
   const isFront = panel === "front";
   const estimates: Estimate[] = [];
@@ -158,7 +159,7 @@ export function calculateBodice(
   // same neck-gap estimate ERP's prior method already used, applied
   // symmetrically so the pair stays consistent whichever way it was entered.
   const shoulderRaw = m.shoulder ?? 0;
-  const readAsCross = shoulderRaw >= 30;
+  const readAsCross = shoulderRaw >= SHOULDER_CROSS_THRESHOLD;
   const neckGap = (m.neck ?? bust / BODY.neckFromChestDivisor) / 5;
   const shoulderWidth = readAsCross ? shoulderRaw : 2 * (shoulderRaw + neckGap);
   const shoulderLen = readAsCross ? shoulderRaw / 2 - neckGap : shoulderRaw;
@@ -167,8 +168,8 @@ export function calculateBodice(
     severity: "info",
     field: "shoulder",
     message: readAsCross
-      ? `Shoulder ${shoulderRaw} cm read as a tip-to-tip measurement, giving a ${shoulderLen.toFixed(1)} cm shoulder seam.`
-      : `Shoulder ${shoulderRaw} cm read as a single shoulder seam, giving a ${shoulderWidth.toFixed(1)} cm tip-to-tip width.`,
+      ? `Shoulder ${shoulderRaw} in read as a tip-to-tip measurement, giving a ${shoulderLen.toFixed(1)} in shoulder seam.`
+      : `Shoulder ${shoulderRaw} in read as a single shoulder seam, giving a ${shoulderWidth.toFixed(1)} in tip-to-tip width.`,
   });
 
   const shoulderDrop = resolve(
@@ -176,7 +177,7 @@ export function calculateBodice(
     () => shoulderRaw * BODICE.shoulderDropFromShoulderRatio,
     "shoulderDrop",
     "shoulder × 0.05",
-    estimates
+    estimates,
   );
 
   const frontBodiceLength = resolveBodiceLength(
@@ -185,7 +186,7 @@ export function calculateBodice(
     BODY.frontNeckToWaistFromHeightRatio,
     BODY.fallbackBodiceLength.front,
     "frontNeckToWaist",
-    estimates
+    estimates,
   );
   const backBodiceLength = resolveBodiceLength(
     m.backNeckToWaist,
@@ -193,7 +194,7 @@ export function calculateBodice(
     BODY.backNeckToWaistFromHeightRatio,
     BODY.fallbackBodiceLength.back,
     "backNeckToWaist",
-    estimates
+    estimates,
   );
 
   const sideSeamLength = resolve(
@@ -201,7 +202,7 @@ export function calculateBodice(
     () => backBodiceLength * BODICE.sideSeamLengthFromBackBodiceLengthRatio,
     "sideSeamLength",
     "back bodice length × 0.43",
-    estimates
+    estimates,
   );
 
   const bustPointSep = resolve(
@@ -209,7 +210,7 @@ export function calculateBodice(
     () => bust * BODICE.bustPointSepFromBustRatio,
     "bustPointSep",
     "bust × 0.2",
-    estimates
+    estimates,
   );
 
   const draft: BodiceDraft = {
@@ -241,9 +242,33 @@ export function calculateBodice(
   };
 
   if (isFront) {
-    draftFront(m, draft, bust, waist, shoulderWidth, shoulderLen, shoulderDrop, bustPointSep, frontBodiceLength, backBodiceLength, estimates);
+    draftFront(
+      m,
+      draft,
+      bust,
+      waist,
+      shoulderWidth,
+      shoulderLen,
+      shoulderDrop,
+      bustPointSep,
+      frontBodiceLength,
+      backBodiceLength,
+      estimates,
+    );
   } else {
-    draftBack(m, draft, bust, waist, shoulderWidth, shoulderLen, shoulderDrop, backBodiceLength, sideSeamLength, opts, estimates);
+    draftBack(
+      m,
+      draft,
+      bust,
+      waist,
+      shoulderWidth,
+      shoulderLen,
+      shoulderDrop,
+      backBodiceLength,
+      sideSeamLength,
+      opts,
+      estimates,
+    );
   }
 
   return draft;
@@ -262,28 +287,28 @@ function draftFront(
   bustPointSep: number,
   frontBodiceLength: number,
   backBodiceLength: number,
-  estimates: Estimate[]
+  estimates: Estimate[],
 ): void {
   const centerFrontLength = resolve(
     m.centerFrontLength,
     () => Math.max(frontBodiceLength - BODICE.centerFrontLengthOffset, 1),
     "centerFrontLength",
     "front bodice length − 3.5in",
-    estimates
+    estimates,
   );
   const bustDepth = resolve(
     m.bustDepth,
     () => bust * BODICE.bustDepthFromBustRatio,
     "bustDepth",
     "bust × 0.25",
-    estimates
+    estimates,
   );
   const acrossChestWidth = resolve(
     m.acrossChestWidth,
     () => bust * BODICE.acrossChestWidthFromBustRatio,
     "acrossChestWidth",
     "bust × 0.32",
-    estimates
+    estimates,
   );
 
   // A: High Point Shoulder / CF top — local origin for this panel.
@@ -322,7 +347,11 @@ function draftFront(
 
   // Armhole ease steps with bust size; K is the underarm.
   // PatternLab: tiered `armholeEase`, `armholeDepth = bust/6 + armholeEase`.
-  const armholeEase = tieredEase(bust, BODICE.armholeEaseTiers, BODICE.armholeEaseDefault);
+  const armholeEase = tieredEase(
+    bust,
+    BODICE.armholeEaseTiers,
+    BODICE.armholeEaseDefault,
+  );
   const armholeDepth = bust / BODICE.armholeDepthDivisor + armholeEase;
   const totalVerticalDrop = shoulderDrop + armholeDepth;
   const rawK = { x: A.x - bust / 4, y: A.y - totalVerticalDrop };
@@ -331,7 +360,10 @@ function draftFront(
   // in slightly. PatternLab: `I = {A.x - acrossChestWidth/2 -
   // acrossChestEase, (C.y+K.y)/2}`.
   const midCFY = (rawC.y + rawK.y) / 2;
-  const rawI = { x: A.x - acrossChestWidth / 2 - BODICE.acrossChestEase, y: midCFY };
+  const rawI = {
+    x: A.x - acrossChestWidth / 2 - BODICE.acrossChestEase,
+    y: midCFY,
+  };
 
   // Dart placement on the waistline, and the dart's first leg (J1), dropped
   // slightly to form a V-notch. PatternLab: `dartPlacementDist =
@@ -345,7 +377,14 @@ function draftFront(
   // longer than the back. PatternLab: tiered on `deltaL = frontBodiceLength -
   // backBodiceLength`.
   const deltaL = frontBodiceLength - backBodiceLength;
-  const sideExtension = tieredEase(deltaL, BODICE.sideExtensionTiers.map((t) => ({ minBust: t.minDeltaL, ease: t.extension })), BODICE.sideExtensionDefault);
+  const sideExtension = tieredEase(
+    deltaL,
+    BODICE.sideExtensionTiers.map((t) => ({
+      minBust: t.minDeltaL,
+      ease: t.extension,
+    })),
+    BODICE.sideExtensionDefault,
+  );
 
   const rawL = { x: rawK.x, y: rawK.y - draftSideSeam(draft) };
   const rawM = { x: rawL.x - sideExtension, y: rawL.y };
@@ -366,17 +405,94 @@ function draftFront(
   // file-level comment for why this single transform is correct). ──────────
   const flip = (p: { x: number; y: number }) => ({ x: -p.x, y: -p.y });
 
-  const centreNeck = point("centreNeck", "CF neck pit", flip(rawC).x, flip(rawC).y, "PatternLab C", ["chest"]);
-  const neckPoint = point("neckPoint", "Side neck point", flip(rawF).x, flip(rawF).y, "PatternLab F", ["shoulder"]);
-  const shoulderPoint = point("shoulderPoint", "Shoulder tip", flip(rawG).x, flip(rawG).y, "PatternLab G", ["shoulder"]);
-  const bustPoint = point("bustPoint", "Bust apex", flip(rawH).x, flip(rawH).y, "PatternLab H", ["bustPointSep", "bustDepth"]);
-  const acrossChestPoint = point("acrossChestPoint", "Across chest", flip(rawI).x, flip(rawI).y, "PatternLab I", ["acrossChestWidth"]);
-  const underarm = point("underarm", "Underarm", flip(rawK).x, flip(rawK).y, "PatternLab K", ["chest"]);
-  const dartLegBase = point("dartLegBase", "Dart V-notch, waist leg", flip(rawJ1).x, flip(rawJ1).y, "PatternLab J1", ["bustPointSep"]);
-  const dartLegApex = point("dartLegApex", "Dart V-notch, bust leg", flip(rawP).x, flip(rawP).y, "PatternLab P", ["waist"]);
-  const sideExtOuter = point("sideExtOuter", "Side extension corner", flip(rawM).x, flip(rawM).y, "PatternLab M", []);
-  const waistSide = point("waistSide", "Side seam at waist", flip(rawN).x, flip(rawN).y, "PatternLab N", ["waist"]);
-  const centreWaist = point("centreWaist", "CF waist corner", flip(rawB).x, flip(rawB).y, "PatternLab B", []);
+  const centreNeck = point(
+    "centreNeck",
+    "CF neck pit",
+    flip(rawC).x,
+    flip(rawC).y,
+    "PatternLab C",
+    ["chest"],
+  );
+  const neckPoint = point(
+    "neckPoint",
+    "Side neck point",
+    flip(rawF).x,
+    flip(rawF).y,
+    "PatternLab F",
+    ["shoulder"],
+  );
+  const shoulderPoint = point(
+    "shoulderPoint",
+    "Shoulder tip",
+    flip(rawG).x,
+    flip(rawG).y,
+    "PatternLab G",
+    ["shoulder"],
+  );
+  const bustPoint = point(
+    "bustPoint",
+    "Bust apex",
+    flip(rawH).x,
+    flip(rawH).y,
+    "PatternLab H",
+    ["bustPointSep", "bustDepth"],
+  );
+  const acrossChestPoint = point(
+    "acrossChestPoint",
+    "Across chest",
+    flip(rawI).x,
+    flip(rawI).y,
+    "PatternLab I",
+    ["acrossChestWidth"],
+  );
+  const underarm = point(
+    "underarm",
+    "Underarm",
+    flip(rawK).x,
+    flip(rawK).y,
+    "PatternLab K",
+    ["chest"],
+  );
+  const dartLegBase = point(
+    "dartLegBase",
+    "Dart V-notch, waist leg",
+    flip(rawJ1).x,
+    flip(rawJ1).y,
+    "PatternLab J1",
+    ["bustPointSep"],
+  );
+  const dartLegApex = point(
+    "dartLegApex",
+    "Dart V-notch, bust leg",
+    flip(rawP).x,
+    flip(rawP).y,
+    "PatternLab P",
+    ["waist"],
+  );
+  const sideExtOuter = point(
+    "sideExtOuter",
+    "Side extension corner",
+    flip(rawM).x,
+    flip(rawM).y,
+    "PatternLab M",
+    [],
+  );
+  const waistSide = point(
+    "waistSide",
+    "Side seam at waist",
+    flip(rawN).x,
+    flip(rawN).y,
+    "PatternLab N",
+    ["waist"],
+  );
+  const centreWaist = point(
+    "centreWaist",
+    "CF waist corner",
+    flip(rawB).x,
+    flip(rawB).y,
+    "PatternLab B",
+    [],
+  );
 
   draft.resolved.bustDepth = bustDepth;
   draft.resolved.centerFrontLength = centerFrontLength;
@@ -423,14 +539,14 @@ function draftBack(
   backBodiceLength: number,
   sideSeamLength: number,
   opts: BlockOptions,
-  estimates: Estimate[]
+  estimates: Estimate[],
 ): void {
   const centerBackLength = resolve(
     m.centerBackLength,
     () => Math.max(backBodiceLength - BODICE.centerBackLengthOffset, 1),
     "centerBackLength",
     "back bodice length − 0.5in (source script's own documented relationship)",
-    estimates
+    estimates,
   );
 
   const hasShoulderDart = opts.bodiceShoulderDart ?? true;
@@ -489,7 +605,8 @@ function draftBack(
     rawBActive = pointAtAngle(rawC, cbAngle, centerBackLength);
   }
 
-  const dartPlacement = draft.resolved.bustPointSep / 2 - BODICE.dartPlacementOffset;
+  const dartPlacement =
+    draft.resolved.bustPointSep / 2 - BODICE.dartPlacementOffset;
 
   let rawG: { x: number; y: number };
   let rawH: { x: number; y: number };
@@ -501,14 +618,21 @@ function draftBack(
     rawG = { x: rawBActive.x + dartPlacement, y: rawBActive.y };
     rawH = { x: rawG.x + BODICE.backWaistDartWidth, y: rawG.y };
     rawI = { x: (rawG.x + rawH.x) / 2, y: rawG.y };
-    rawJ = { x: rawI.x, y: rawI.y + (sideSeamLength - BODICE.backWaistDartWidth) };
+    rawJ = {
+      x: rawI.x,
+      y: rawI.y + (sideSeamLength - BODICE.backWaistDartWidth),
+    };
     rawG1 = { x: rawG.x, y: rawG.y };
   } else {
     const waistAngle = cbAngle + Math.PI / 2;
     rawG = pointAtAngle(rawBActive, waistAngle, dartPlacement);
     rawH = pointAtAngle(rawG, waistAngle, BODICE.backWaistDartWidth);
     rawI = { x: (rawG.x + rawH.x) / 2, y: (rawG.y + rawH.y) / 2 };
-    rawJ = pointAtAngle(rawI, cbAngle, -(sideSeamLength - BODICE.backWaistDartWidth));
+    rawJ = pointAtAngle(
+      rawI,
+      cbAngle,
+      -(sideSeamLength - BODICE.backWaistDartWidth),
+    );
     const jhLength = distance(rawH, rawJ);
     const angleJG = angleBetween(rawJ, rawG);
     rawG1 = pointAtAngle(rawJ, angleJG, jhLength);
@@ -525,13 +649,19 @@ function draftBack(
     const remainingWaist = waist / 4 - dartPlacement;
     rawK = { x: rawH.x + remainingWaist, y: rawH.y };
   } else {
-    rawK = { x: rawBActive.x + (waist / 4 + BODICE.backWaistSideSwaybackOffset), y: rawB.y };
+    rawK = {
+      x: rawBActive.x + (waist / 4 + BODICE.backWaistSideSwaybackOffset),
+      y: rawB.y,
+    };
   }
 
   const rawL = { x: rawK.x, y: rawK.y + sideSeamLength };
   let rawM = { x: A.x, y: rawL.y };
   if (hasSwayback) {
-    rawM = { x: rawC.x + Math.abs(rawL.y - rawC.y) / Math.tan(Math.abs(cbAngle)), y: rawL.y };
+    rawM = {
+      x: rawC.x + Math.abs(rawL.y - rawC.y) / Math.tan(Math.abs(cbAngle)),
+      y: rawL.y,
+    };
   }
 
   const rawN = { x: rawM.x + bust / 4, y: rawM.y };
@@ -543,26 +673,90 @@ function draftBack(
 
   const flip = (p: { x: number; y: number }) => ({ x: -p.x, y: -p.y });
 
-  const centreNeck = point("centreNeck", "Nape", flip(rawC).x, flip(rawC).y, "PatternLab C", ["chest"]);
-  const neckPoint = point("neckPoint", "Side neck point", flip(rawF).x, flip(rawF).y, "PatternLab F", ["shoulder"]);
+  const centreNeck = point(
+    "centreNeck",
+    "Nape",
+    flip(rawC).x,
+    flip(rawC).y,
+    "PatternLab C",
+    ["chest"],
+  );
+  const neckPoint = point(
+    "neckPoint",
+    "Side neck point",
+    flip(rawF).x,
+    flip(rawF).y,
+    "PatternLab F",
+    ["shoulder"],
+  );
   const shoulderPoint = point(
     "shoulderPoint",
     "Shoulder tip",
     flip(rawE1).x,
     flip(rawE1).y,
     hasShoulderDart ? "PatternLab E1" : "PatternLab E",
-    ["shoulder"]
+    ["shoulder"],
   );
-  const acrossBackPoint = point("acrossBackPoint", "Across back", flip(rawR).x, flip(rawR).y, "PatternLab R", ["acrossBackWidth"]);
-  const underarm = point("underarm", "Underarm", flip(rawO).x, flip(rawO).y, "PatternLab O", ["chest"]);
-  const waistSideTop = point("waistSideTop", "Side seam, underarm level", flip(rawK).x, flip(rawK).y, "PatternLab K", ["waist"]);
-  const sideSeamBase = point("sideSeamBase", "Waist dart, side leg", flip(rawH).x, flip(rawH).y, "PatternLab H", []);
-  const waistDartLeg = point("waistDartLeg", "Waist dart, centre leg", flip(rawJ).x, flip(rawJ).y, "PatternLab J", []);
-  const waistDartFoot = point("waistDartFoot", "Waist dart foot", flip(rawG1).x, flip(rawG1).y, "PatternLab G1", []);
-  const centreWaist = point("centreWaist", "CB waist", flip(rawBActive).x, flip(rawBActive).y, "PatternLab B/BActive", []);
+  const acrossBackPoint = point(
+    "acrossBackPoint",
+    "Across back",
+    flip(rawR).x,
+    flip(rawR).y,
+    "PatternLab R",
+    ["acrossBackWidth"],
+  );
+  const underarm = point(
+    "underarm",
+    "Underarm",
+    flip(rawO).x,
+    flip(rawO).y,
+    "PatternLab O",
+    ["chest"],
+  );
+  const waistSideTop = point(
+    "waistSideTop",
+    "Side seam, underarm level",
+    flip(rawK).x,
+    flip(rawK).y,
+    "PatternLab K",
+    ["waist"],
+  );
+  const sideSeamBase = point(
+    "sideSeamBase",
+    "Waist dart, side leg",
+    flip(rawH).x,
+    flip(rawH).y,
+    "PatternLab H",
+    [],
+  );
+  const waistDartLeg = point(
+    "waistDartLeg",
+    "Waist dart, centre leg",
+    flip(rawJ).x,
+    flip(rawJ).y,
+    "PatternLab J",
+    [],
+  );
+  const waistDartFoot = point(
+    "waistDartFoot",
+    "Waist dart foot",
+    flip(rawG1).x,
+    flip(rawG1).y,
+    "PatternLab G1",
+    [],
+  );
+  const centreWaist = point(
+    "centreWaist",
+    "CB waist",
+    flip(rawBActive).x,
+    flip(rawBActive).y,
+    "PatternLab B/BActive",
+    [],
+  );
 
   draft.resolved.centerBackLength = centerBackLength;
-  draft.resolved.acrossBackWidth = acrossBackWidth ?? (acrossBackHalf - BODICE.acrossBackEase) * 2;
+  draft.resolved.acrossBackWidth =
+    acrossBackWidth ?? (acrossBackHalf - BODICE.acrossBackEase) * 2;
   draft.back = {
     centreNeck,
     neckPoint,
@@ -577,9 +771,30 @@ function draftBack(
   };
 
   if (hasShoulderDart) {
-    const apex = point("shoulderDartApex", "Shoulder dart apex", flip(rawP).x, flip(rawP).y, "PatternLab P", []);
-    const legStart = point("shoulderDartLegStart", "Shoulder dart leg (P1)", flip(rawP1).x, flip(rawP1).y, "PatternLab P1", []);
-    const legEnd = point("shoulderDartLegEnd", "Shoulder dart leg (P2)", flip(rawP2).x, flip(rawP2).y, "PatternLab P2", []);
+    const apex = point(
+      "shoulderDartApex",
+      "Shoulder dart apex",
+      flip(rawP).x,
+      flip(rawP).y,
+      "PatternLab P",
+      [],
+    );
+    const legStart = point(
+      "shoulderDartLegStart",
+      "Shoulder dart leg (P1)",
+      flip(rawP1).x,
+      flip(rawP1).y,
+      "PatternLab P1",
+      [],
+    );
+    const legEnd = point(
+      "shoulderDartLegEnd",
+      "Shoulder dart leg (P2)",
+      flip(rawP2).x,
+      flip(rawP2).y,
+      "PatternLab P2",
+      [],
+    );
     draft.shoulderDart = {
       apex,
       legStart,
@@ -598,11 +813,15 @@ function draftBack(
       flip(rawQ).x,
       flip(rawQ).y,
       "PatternLab Q",
-      []
+      [],
     );
   }
 
-  draft.waistDart = { x: waistDartLeg.x, intake: distance(rawG, rawH), height: 0 };
+  draft.waistDart = {
+    x: waistDartLeg.x,
+    intake: distance(rawG, rawH),
+    height: 0,
+  };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -628,14 +847,15 @@ function shortSide(hypotenuse: number, leg: number): number {
  * meets or exceeds, else the default. Tiers must be sorted highest-first.
  * The epsilon guards against a tier boundary computed via a different
  * floating-point path than the threshold itself landing a hair below it
- * (e.g. `18*IN - 15*IN` vs `3*IN` are mathematically equal but not always
- * bit-identical) — PatternLab's own script never hits this because its
- * comparison and its threshold are both plain literals.
+ * (e.g. a `deltaL` computed as `frontBodiceLength - backBodiceLength` can
+ * land a hair off an exact tier threshold like `3.0` due to how the two
+ * lengths were themselves derived) — PatternLab's own script never hits this
+ * because its comparison and its threshold are both plain literals.
  */
 function tieredEase(
   value: number,
   tiers: readonly { minBust: number; ease: number }[],
-  fallback: number
+  fallback: number,
 ): number {
   const EPSILON = 1e-9;
   for (const tier of tiers) {
@@ -656,9 +876,10 @@ function resolve(
   derive: () => number,
   field: keyof Measurements,
   formula: string,
-  estimates: Estimate[]
+  estimates: Estimate[],
 ): number {
-  if (measured !== undefined && Number.isFinite(measured) && measured > 0) return measured;
+  if (measured !== undefined && Number.isFinite(measured) && measured > 0)
+    return measured;
   const value = derive();
   estimates.push({ field, value, from: formula });
   return value;
@@ -676,9 +897,10 @@ function resolveBodiceLength(
   ratio: number,
   fallback: number,
   field: keyof Measurements,
-  estimates: Estimate[]
+  estimates: Estimate[],
 ): number {
-  if (measured !== undefined && Number.isFinite(measured) && measured > 0) return measured;
+  if (measured !== undefined && Number.isFinite(measured) && measured > 0)
+    return measured;
   if (height !== undefined && Number.isFinite(height) && height > 0) {
     const value = height * ratio;
     estimates.push({ field, value, from: `height × ${ratio}` });

@@ -8,8 +8,8 @@
  * Each layer only knows about the one above it. `types.ts` holds the contracts
  * they share so no layer needs to import another's implementation.
  *
- * Units are centimetres throughout. SVG path `d` strings use cm coordinates,
- * so a viewBox of `w: 30` is 30 cm wide.
+ * Units are inches throughout. SVG path `d` strings use inch coordinates,
+ * so a viewBox of `w: 12` is 12 in wide.
  */
 
 // ── Body measurements ─────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ export type Measurements = {
   backNeckToWaist?: number;
   /** Front neck point to waist, measured down the centre front over the bust. */
   frontNeckToWaist?: number;
-  /** Waist to hip level. Defaults to a standard 20 cm drop. */
+  /** Waist to hip level. Defaults to a standard 7.9 in drop. */
   waistToHip?: number;
   /** Across back, armhole to armhole. Estimated from bust when absent. */
   backWidth?: number;
@@ -139,7 +139,8 @@ export type Point = { x: number; y: number };
 
 export type Bounds = { x: number; y: number; w: number; h: number };
 
-export type PathType = "outline" | "dart" | "grainline" | "construction" | "fold";
+export type PathType =
+  "outline" | "dart" | "grainline" | "construction" | "fold";
 
 export type PatternPath = { d: string; type: PathType };
 
@@ -217,11 +218,11 @@ export type PatternBlock = {
   viewBox: Bounds;
   paths: PatternPath[];
   labels: PatternLabel[];
-  /** Calculation summaries, e.g. "Armhole depth: 18.0 cm". */
+  /** Calculation summaries, e.g. "Armhole depth: 7.1 in". */
   notes: string[];
   /** Structured advisories and anomalies. */
   diagnostics: Diagnostic[];
-  /** Named drafting values, in cm. */
+  /** Named drafting values, in inches. */
   calculations: Record<string, number>;
   /** Values the engine derived rather than measured. */
   estimates: Estimate[];
@@ -234,9 +235,9 @@ export type PatternBlock = {
 export type EasePreset = "fitted" | "standard" | "relaxed";
 
 export type BlockOptions = {
-  /** Waist-to-hem length of a standalone skirt (cm). */
+  /** Waist-to-hem length of a standalone skirt (in). */
   skirtLength?: number;
-  /** Waist-to-hem length of the skirt portion of a dress (cm). */
+  /** Waist-to-hem length of the skirt portion of a dress (in). */
   dressLength?: number;
   ease?: EasePreset;
 

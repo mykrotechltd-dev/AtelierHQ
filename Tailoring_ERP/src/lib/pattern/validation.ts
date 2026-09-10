@@ -12,7 +12,11 @@
  * Nothing here throws. A caller always gets a result it can render.
  */
 
-import { PLAUSIBLE_RANGE, SHOULDER_CROSS_THRESHOLD, SHOULDER_SEAM_RANGE } from "./constants.ts";
+import {
+  PLAUSIBLE_RANGE,
+  SHOULDER_CROSS_THRESHOLD,
+  SHOULDER_SEAM_RANGE,
+} from "./constants.ts";
 import type {
   Diagnostic,
   MeasurementKey,
@@ -59,7 +63,7 @@ export function labelFor(field: MeasurementKey): string {
  */
 export function validateMeasurements(
   m: Measurements,
-  required: readonly MeasurementKey[]
+  required: readonly MeasurementKey[],
 ): ValidationResult {
   const diagnostics: Diagnostic[] = [];
 
@@ -95,7 +99,10 @@ export function validateMeasurements(
   }
 
   // Optional fields that are present must still be sane.
-  for (const [key, value] of Object.entries(m) as [MeasurementKey, number | undefined][]) {
+  for (const [key, value] of Object.entries(m) as [
+    MeasurementKey,
+    number | undefined,
+  ][]) {
     if (value === undefined || required.includes(key)) continue;
     if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
       diagnostics.push({
@@ -127,7 +134,7 @@ export function checkRelationships(m: Measurements): Diagnostic[] {
       code: "WAIST_EXCEEDS_HIP",
       severity: "warning",
       field: "waist",
-      message: `Waist (${m.waist} cm) is larger than hips (${m.hips} cm). Check the measurements — the skirt and dress blocks will have no hip shaping.`,
+      message: `Waist (${m.waist} in) is larger than hips (${m.hips} in). Check the measurements — the skirt and dress blocks will have no hip shaping.`,
     });
   }
 
@@ -136,7 +143,7 @@ export function checkRelationships(m: Measurements): Diagnostic[] {
       code: "WAIST_EXCEEDS_CHEST",
       severity: "warning",
       field: "waist",
-      message: `Waist (${m.waist} cm) is larger than chest (${m.chest} cm). The bodice will have no waist dart.`,
+      message: `Waist (${m.waist} in) is larger than chest (${m.chest} in). The bodice will have no waist dart.`,
     });
   }
 
@@ -145,13 +152,14 @@ export function checkRelationships(m: Measurements): Diagnostic[] {
   if (m.shoulder !== undefined) {
     const s = m.shoulder;
     const looksCross = s >= SHOULDER_CROSS_THRESHOLD;
-    const plausibleSeam = s >= SHOULDER_SEAM_RANGE.min && s <= SHOULDER_SEAM_RANGE.max;
+    const plausibleSeam =
+      s >= SHOULDER_SEAM_RANGE.min && s <= SHOULDER_SEAM_RANGE.max;
     if (!looksCross && !plausibleSeam) {
       out.push({
         code: "SHOULDER_OUT_OF_RANGE",
         severity: "warning",
         field: "shoulder",
-        message: `Shoulder of ${s} cm is outside the usual range — about 11–16 cm for a single shoulder seam, or 36–46 cm measured tip to tip.`,
+        message: `Shoulder of ${s} in is outside the usual range — about 4.3–6.3 in for a single shoulder seam, or 14.2–18.1 in measured tip to tip.`,
       });
     }
     if (looksCross && m.chest !== undefined && s > m.chest * 0.6) {
@@ -159,7 +167,7 @@ export function checkRelationships(m: Measurements): Diagnostic[] {
         code: "SHOULDER_OUT_OF_RANGE",
         severity: "warning",
         field: "shoulder",
-        message: `Shoulder (${s} cm) is unusually wide relative to chest (${m.chest} cm).`,
+        message: `Shoulder (${s} in) is unusually wide relative to chest (${m.chest} in).`,
       });
     }
   }
@@ -172,10 +180,15 @@ export function checkRelationships(m: Measurements): Diagnostic[] {
     if (value === undefined || !Number.isFinite(value) || value <= 0) continue;
     if (value < range.min || value > range.max) {
       out.push({
-        code: key === "neck" ? "NECK_OUT_OF_RANGE" : key === "height" ? "HEIGHT_OUT_OF_RANGE" : "SHOULDER_OUT_OF_RANGE",
+        code:
+          key === "neck"
+            ? "NECK_OUT_OF_RANGE"
+            : key === "height"
+              ? "HEIGHT_OUT_OF_RANGE"
+              : "SHOULDER_OUT_OF_RANGE",
         severity: "warning",
         field: key,
-        message: `${labelFor(key)} of ${value} cm is outside the usual ${range.min}–${range.max} cm range. Check for a typo or a units mix-up.`,
+        message: `${labelFor(key)} of ${value} in is outside the usual ${range.min.toFixed(1)}–${range.max.toFixed(1)} in range. Check for a typo or a units mix-up.`,
       });
     }
   }

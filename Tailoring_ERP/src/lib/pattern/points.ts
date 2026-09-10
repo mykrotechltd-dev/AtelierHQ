@@ -33,7 +33,7 @@ export function point(
   x: number,
   y: number,
   formula: string,
-  dependsOn: readonly (MeasurementKey | string)[] = []
+  dependsOn: readonly (MeasurementKey | string)[] = [],
 ): DraftPoint {
   return { id, label, x, y, formula, dependsOn };
 }
@@ -81,8 +81,15 @@ export function angleBetween(a: Point, b: Point): number {
 }
 
 /** A point `dist` from `origin`, along `angle` radians. */
-export function pointAtAngle(origin: Point, angle: number, dist: number): Point {
-  return { x: origin.x + dist * Math.cos(angle), y: origin.y + dist * Math.sin(angle) };
+export function pointAtAngle(
+  origin: Point,
+  angle: number,
+  dist: number,
+): Point {
+  return {
+    x: origin.x + dist * Math.cos(angle),
+    y: origin.y + dist * Math.sin(angle),
+  };
 }
 
 /**
@@ -99,10 +106,12 @@ export function pointAtSlope(
   from: Point,
   length: number,
   drop: number,
-  direction: 1 | -1 = 1
+  direction: 1 | -1 = 1,
 ): Point {
   const clampedDrop = Math.min(Math.abs(drop), length);
-  const dx = Math.sqrt(Math.max(length * length - clampedDrop * clampedDrop, 0));
+  const dx = Math.sqrt(
+    Math.max(length * length - clampedDrop * clampedDrop, 0),
+  );
   return { x: from.x + dx * direction, y: from.y + clampedDrop };
 }
 
@@ -115,16 +124,16 @@ export type BustDart = {
   legStart: Point;
   /** Leg the dart opens to, after rotation. */
   legEnd: Point;
-  /** Straight-line opening between the leg ends (cm). */
+  /** Straight-line opening between the leg ends (in). */
   intake: number;
   /** Rotation applied, in radians. */
   angle: number;
-  /** Length of each leg from the apex (cm). */
+  /** Length of each leg from the apex (in). */
   legLength: number;
 };
 
 /**
- * Opens a dart of `intake` cm around `apex`, starting from the leg through
+ * Opens a dart of `intake` inches around `apex`, starting from the leg through
  * `legPoint`.
  *
  * Solved with the law of cosines: with two legs of known equal length `L` and a
@@ -140,7 +149,7 @@ export function openDart(
   apex: Point,
   legPoint: Point,
   intake: number,
-  direction: 1 | -1 = 1
+  direction: 1 | -1 = 1,
 ): BustDart {
   const legLength = distance(apex, legPoint);
 

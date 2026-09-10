@@ -4,14 +4,20 @@
  * Parses SVG path `d` strings into editable command objects and serialises
  * them back. Supports M, L, Q, C, Z — the full set used by pattern-engine.ts.
  *
- * Coordinates are in centimetres (matching the pattern engine's viewBox).
+ * Coordinates are in inches (matching the pattern engine's viewBox).
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type MCmd = { type: "M"; x: number; y: number };
 export type LCmd = { type: "L"; x: number; y: number };
-export type QCmd = { type: "Q"; cpx: number; cpy: number; x: number; y: number };
+export type QCmd = {
+  type: "Q";
+  cpx: number;
+  cpy: number;
+  x: number;
+  y: number;
+};
 export type CCmd = {
   type: "C";
   cp1x: number;
@@ -78,7 +84,8 @@ export function serialisePath(cmds: EditablePath): string {
     .map((cmd) => {
       if (cmd.type === "M") return `M ${r(cmd.x)} ${r(cmd.y)}`;
       if (cmd.type === "L") return `L ${r(cmd.x)} ${r(cmd.y)}`;
-      if (cmd.type === "Q") return `Q ${r(cmd.cpx)} ${r(cmd.cpy)} ${r(cmd.x)} ${r(cmd.y)}`;
+      if (cmd.type === "Q")
+        return `Q ${r(cmd.cpx)} ${r(cmd.cpy)} ${r(cmd.x)} ${r(cmd.y)}`;
       if (cmd.type === "C")
         return `C ${r(cmd.cp1x)} ${r(cmd.cp1y)} ${r(cmd.cp2x)} ${r(cmd.cp2y)} ${r(cmd.x)} ${r(cmd.y)}`;
       return "Z";
@@ -105,14 +112,50 @@ export function extractPoints(cmds: EditablePath): EditPoint[] {
     const cmd = cmds[i];
     if (cmd.type === "Z") continue;
     if (cmd.type === "M" || cmd.type === "L") {
-      points.push({ id: `${i}-anchor`, cmdIdx: i, role: "anchor", x: cmd.x, y: cmd.y });
+      points.push({
+        id: `${i}-anchor`,
+        cmdIdx: i,
+        role: "anchor",
+        x: cmd.x,
+        y: cmd.y,
+      });
     } else if (cmd.type === "Q") {
-      points.push({ id: `${i}-cp`, cmdIdx: i, role: "cp", x: cmd.cpx, y: cmd.cpy });
-      points.push({ id: `${i}-anchor`, cmdIdx: i, role: "anchor", x: cmd.x, y: cmd.y });
+      points.push({
+        id: `${i}-cp`,
+        cmdIdx: i,
+        role: "cp",
+        x: cmd.cpx,
+        y: cmd.cpy,
+      });
+      points.push({
+        id: `${i}-anchor`,
+        cmdIdx: i,
+        role: "anchor",
+        x: cmd.x,
+        y: cmd.y,
+      });
     } else if (cmd.type === "C") {
-      points.push({ id: `${i}-cp1`, cmdIdx: i, role: "cp1", x: cmd.cp1x, y: cmd.cp1y });
-      points.push({ id: `${i}-cp2`, cmdIdx: i, role: "cp2", x: cmd.cp2x, y: cmd.cp2y });
-      points.push({ id: `${i}-anchor`, cmdIdx: i, role: "anchor", x: cmd.x, y: cmd.y });
+      points.push({
+        id: `${i}-cp1`,
+        cmdIdx: i,
+        role: "cp1",
+        x: cmd.cp1x,
+        y: cmd.cp1y,
+      });
+      points.push({
+        id: `${i}-cp2`,
+        cmdIdx: i,
+        role: "cp2",
+        x: cmd.cp2x,
+        y: cmd.cp2y,
+      });
+      points.push({
+        id: `${i}-anchor`,
+        cmdIdx: i,
+        role: "anchor",
+        x: cmd.x,
+        y: cmd.y,
+      });
     }
   }
   return points;
@@ -124,7 +167,7 @@ export function applyPointMove(
   cmdIdx: number,
   role: PointRole,
   nx: number,
-  ny: number
+  ny: number,
 ): EditablePath {
   return cmds.map((cmd, i): PathCmd => {
     if (i !== cmdIdx) return cmd;
@@ -135,14 +178,19 @@ export function applyPointMove(
       if (cmd.type === "C") return { ...cmd, x: nx, y: ny };
     }
     if (role === "cp" && cmd.type === "Q") return { ...cmd, cpx: nx, cpy: ny };
-    if (role === "cp1" && cmd.type === "C") return { ...cmd, cp1x: nx, cp1y: ny };
-    if (role === "cp2" && cmd.type === "C") return { ...cmd, cp2x: nx, cp2y: ny };
+    if (role === "cp1" && cmd.type === "C")
+      return { ...cmd, cp1x: nx, cp1y: ny };
+    if (role === "cp2" && cmd.type === "C")
+      return { ...cmd, cp2x: nx, cp2y: ny };
     return cmd;
   });
 }
 
 /** Get the previous anchor position (needed to draw tangent lines) */
-export function prevAnchor(cmds: EditablePath, cmdIdx: number): { x: number; y: number } | null {
+export function prevAnchor(
+  cmds: EditablePath,
+  cmdIdx: number,
+): { x: number; y: number } | null {
   for (let i = cmdIdx - 1; i >= 0; i--) {
     const c = cmds[i];
     if (c.type === "M" || c.type === "L") return { x: c.x, y: c.y };

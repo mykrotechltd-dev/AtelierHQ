@@ -1,8 +1,16 @@
 import { useState } from "react";
-import { useCreateCustomer, useUpdateCustomer } from "@/lib/queries/customers.ts";
+import {
+  useCreateCustomer,
+  useUpdateCustomer,
+} from "@/lib/queries/customers.ts";
 import { useMeasurementUnit } from "@/components/providers/measurement-unit.tsx";
 import { UnitToggle } from "@/components/ui/unit-toggle.tsx";
-import { cmToUnit, unitToCm, unitLabel, type MeasurementUnit } from "@/lib/units.ts";
+import {
+  inToUnit,
+  unitToIn,
+  unitLabel,
+  type MeasurementUnit,
+} from "@/lib/units.ts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,7 +32,12 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs.tsx";
 import type { Customer } from "@/lib/supabase/types.ts";
 
 const schema = z.object({
@@ -53,16 +66,21 @@ function toNum(v: string | undefined): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
-/** Parses a typed length value in the given display unit and converts to cm
- *  for storage — `measurements` are always stored in cm. */
-function toNumCm(v: string | undefined, unit: MeasurementUnit): number | undefined {
+/** Parses a typed length value in the given display unit and converts to
+ *  inches for storage — `measurements` are always stored in inches. */
+function toNumIn(
+  v: string | undefined,
+  unit: MeasurementUnit,
+): number | undefined {
   const n = toNum(v);
-  return n === undefined ? undefined : unitToCm(n, unit);
+  return n === undefined ? undefined : unitToIn(n, unit);
 }
 
-/** Formats a stored cm value for display in the given unit — "" when absent. */
-function fromCm(cm: number | undefined, unit: MeasurementUnit): string {
-  return cm === undefined ? "" : (Math.round(cmToUnit(cm, unit) * 10) / 10).toString();
+/** Formats a stored inches value for display in the given unit — "" when absent. */
+function fromIn(inches: number | undefined, unit: MeasurementUnit): string {
+  return inches === undefined
+    ? ""
+    : (Math.round(inToUnit(inches, unit) * 10) / 10).toString();
 }
 
 export default function CustomerDialog({
@@ -87,15 +105,15 @@ export default function CustomerDialog({
       phone: customer?.phone ?? "",
       email: customer?.email ?? "",
       notes: customer?.notes ?? "",
-      chest: fromCm(m?.chest, unit),
-      waist: fromCm(m?.waist, unit),
-      hips: fromCm(m?.hips, unit),
-      shoulder: fromCm(m?.shoulder, unit),
-      sleeveLength: fromCm(m?.sleeveLength, unit),
-      inseam: fromCm(m?.inseam, unit),
-      neck: fromCm(m?.neck, unit),
-      thigh: fromCm(m?.thigh, unit),
-      height: fromCm(m?.height, unit),
+      chest: fromIn(m?.chest, unit),
+      waist: fromIn(m?.waist, unit),
+      hips: fromIn(m?.hips, unit),
+      shoulder: fromIn(m?.shoulder, unit),
+      sleeveLength: fromIn(m?.sleeveLength, unit),
+      inseam: fromIn(m?.inseam, unit),
+      neck: fromIn(m?.neck, unit),
+      thigh: fromIn(m?.thigh, unit),
+      height: fromIn(m?.height, unit),
       weight: m?.weight?.toString() ?? "", // kg — not a length, never converted
       measurementNotes: m?.notes ?? "",
     },
@@ -105,20 +123,20 @@ export default function CustomerDialog({
     setSaving(true);
     try {
       const measurements = {
-        chest: toNumCm(values.chest, unit),
-        waist: toNumCm(values.waist, unit),
-        hips: toNumCm(values.hips, unit),
-        shoulder: toNumCm(values.shoulder, unit),
-        sleeveLength: toNumCm(values.sleeveLength, unit),
-        inseam: toNumCm(values.inseam, unit),
-        neck: toNumCm(values.neck, unit),
-        thigh: toNumCm(values.thigh, unit),
-        height: toNumCm(values.height, unit),
+        chest: toNumIn(values.chest, unit),
+        waist: toNumIn(values.waist, unit),
+        hips: toNumIn(values.hips, unit),
+        shoulder: toNumIn(values.shoulder, unit),
+        sleeveLength: toNumIn(values.sleeveLength, unit),
+        inseam: toNumIn(values.inseam, unit),
+        neck: toNumIn(values.neck, unit),
+        thigh: toNumIn(values.thigh, unit),
+        height: toNumIn(values.height, unit),
         weight: toNum(values.weight), // kg — not a length, never converted
         notes: values.measurementNotes || undefined,
       };
       const hasMeasurements = Object.values(measurements).some(
-        (v) => v !== undefined
+        (v) => v !== undefined,
       );
 
       const payload = {
@@ -158,8 +176,12 @@ export default function CustomerDialog({
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <Tabs defaultValue="info" className="w-full">
               <TabsList className="w-full mb-4">
-                <TabsTrigger value="info" className="flex-1">Contact info</TabsTrigger>
-                <TabsTrigger value="measurements" className="flex-1">Measurements</TabsTrigger>
+                <TabsTrigger value="info" className="flex-1">
+                  Contact info
+                </TabsTrigger>
+                <TabsTrigger value="measurements" className="flex-1">
+                  Measurements
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="info" className="space-y-4">
@@ -224,7 +246,9 @@ export default function CustomerDialog({
               <TabsContent value="measurements" className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground font-body">
-                    All measurements in {unit === "in" ? "inches" : "centimetres"} ({unitLabel(unit)}), except weight
+                    All measurements in{" "}
+                    {unit === "cm" ? "centimetres" : "inches"} (
+                    {unitLabel(unit)}), except weight
                   </p>
                   <UnitToggle />
                 </div>
@@ -290,7 +314,11 @@ export default function CustomerDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : customer ? "Save changes" : "Add customer"}
+                {saving
+                  ? "Saving..."
+                  : customer
+                    ? "Save changes"
+                    : "Add customer"}
               </Button>
             </div>
           </form>

@@ -9,22 +9,28 @@ interface MeasurementUnitContextValue {
 }
 
 const MeasurementUnitContext = createContext<MeasurementUnitContextValue>({
-  unit: "cm",
+  unit: "in",
   setUnit: () => {},
 });
 
 function readStored(): MeasurementUnit {
-  if (typeof window === "undefined") return "cm";
+  if (typeof window === "undefined") return "in";
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === "in" ? "in" : "cm";
+  return stored === "cm" ? "cm" : "in";
 }
 
 /**
- * App-wide measurement unit preference (cm/in), persisted to localStorage.
+ * App-wide measurement unit preference (in/cm), persisted to localStorage.
  * Changing it anywhere (Pattern Lab, customer measurements) updates every
- * other place reading it, since they all share this one provider.
+ * other place reading it, since they all share this one provider. Inches is
+ * the native, stored unit — cm is a display/entry convenience converted at
+ * the UI boundary only (see ../../lib/units.ts).
  */
-export function MeasurementUnitProvider({ children }: { children: React.ReactNode }) {
+export function MeasurementUnitProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [unit, setUnitState] = useState<MeasurementUnit>(readStored);
 
   useEffect(() => {

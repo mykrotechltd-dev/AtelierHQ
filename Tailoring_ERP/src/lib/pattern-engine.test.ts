@@ -57,8 +57,8 @@ function maxY(d: string): number {
 }
 
 // The measurements from the reported bug report: shoulder given as a single
-// shoulder seam (21 cm) rather than a cross-shoulder measurement.
-const BUG_REPORT: Measurements = { chest: 84, waist: 60, shoulder: 21 };
+// shoulder seam (8.27 in) rather than a cross-shoulder measurement.
+const BUG_REPORT: Measurements = { chest: 33.07, waist: 23.62, shoulder: 8.27 };
 
 const BODICE_BUILDERS = [
   { name: "bodiceFront", fn: bodiceFront },
@@ -73,7 +73,7 @@ const ALL_BUILDERS = [
 
 /** Dress blocks additionally require hips. */
 function measurementsFor(name: string, base: Measurements): Measurements {
-  return name.startsWith("dress") ? { hips: 90, ...base } : base;
+  return name.startsWith("dress") ? { hips: 35.43, ...base } : base;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -92,64 +92,78 @@ describe("pattern engine — armhole geometry", () => {
       // The block must not be wider than it is tall — a bodice panel is a
       // portrait shape. The old bug produced a near-circular blob.
       expect(widest).toBeLessThan(maxY(d));
-    }
+    },
   );
 
-  it.each(ALL_BUILDERS)("$name never places a point at negative x", ({ name, fn }) => {
-    const block = fn(measurementsFor(name, BUG_REPORT));
-    for (const p of allPoints(outlineOf(block))) {
-      expect(p.x).toBeGreaterThanOrEqual(-0.01);
-    }
-  });
+  it.each(ALL_BUILDERS)(
+    "$name never places a point at negative x",
+    ({ name, fn }) => {
+      const block = fn(measurementsFor(name, BUG_REPORT));
+      for (const p of allPoints(outlineOf(block))) {
+        expect(p.x).toBeGreaterThanOrEqual(-0.01);
+      }
+    },
+  );
 
   it.each(ALL_BUILDERS)("$name uses a cubic armhole curve", ({ name, fn }) => {
     const block = fn(measurementsFor(name, BUG_REPORT));
-    const armhole = block.paths.find((p) => p.d.includes("C ") && p.type === "construction");
-    expect(armhole, `${name} should expose a cubic armhole construction line`).toBeDefined();
+    const armhole = block.paths.find(
+      (p) => p.d.includes("C ") && p.type === "construction",
+    );
+    expect(
+      armhole,
+      `${name} should expose a cubic armhole construction line`,
+    ).toBeDefined();
   });
 });
 
 describe("pattern engine — shoulder measurement conventions", () => {
   it.each(BODICE_BUILDERS)(
-    "$name reads 21 cm as a single shoulder seam",
+    "$name reads 8.27 in as a single shoulder seam",
     ({ fn }) => {
-      const block = fn({ chest: 84, waist: 60, shoulder: 21 });
+      const block = fn({ chest: 33.07, waist: 23.62, shoulder: 8.27 });
       const note = block.notes.find((n) => n.startsWith("Shoulder seam:"));
       expect(note).toContain("single shoulder");
-    }
+    },
   );
 
   it.each(BODICE_BUILDERS)(
-    "$name halves a 39.5 cm cross-shoulder measurement",
+    "$name halves a 15.55 in cross-shoulder measurement",
     ({ fn }) => {
-      const block = fn({ chest: 90, waist: 71, shoulder: 39.5 });
+      const block = fn({ chest: 35.43, waist: 27.95, shoulder: 15.55 });
       const note = block.notes.find((n) => n.startsWith("Shoulder seam:"));
       expect(note).toContain("cross-shoulder");
-      // 39.5 / 2 minus neck width lands in a realistic 11–16 cm band.
+      // 15.55 / 2 minus neck width lands in a realistic 4.3–6.3 in band.
       const seam = Number(note?.match(/Shoulder seam: ([\d.]+)/)?.[1]);
-      expect(seam).toBeGreaterThan(10);
-      expect(seam).toBeLessThan(17);
-    }
+      expect(seam).toBeGreaterThan(3.9);
+      expect(seam).toBeLessThan(6.7);
+    },
   );
 
-  it.each(BODICE_BUILDERS)("$name clamps an absurdly large shoulder", ({ fn }) => {
-    const block = fn({ chest: 84, waist: 60, shoulder: 90 });
-    const d = outlineOf(block);
-    // Even with nonsense input the panel stays portrait and in-bounds.
-    expect(maxX(d)).toBeLessThan(maxY(d));
-    expect(maxX(d)).toBeLessThanOrEqual(block.viewBox.x + block.viewBox.w);
-  });
+  it.each(BODICE_BUILDERS)(
+    "$name clamps an absurdly large shoulder",
+    ({ fn }) => {
+      const block = fn({ chest: 33.07, waist: 23.62, shoulder: 35.43 });
+      const d = outlineOf(block);
+      // Even with nonsense input the panel stays portrait and in-bounds.
+      expect(maxX(d)).toBeLessThan(maxY(d));
+      expect(maxX(d)).toBeLessThanOrEqual(block.viewBox.x + block.viewBox.w);
+    },
+  );
 
-  it.each(BODICE_BUILDERS)("$name clamps an absurdly small shoulder", ({ fn }) => {
-    const block = fn({ chest: 84, waist: 60, shoulder: 1 });
-    const seam = Number(
-      block.notes
-        .find((n) => n.startsWith("Shoulder seam:"))
-        ?.match(/Shoulder seam: ([\d.]+)/)?.[1]
-    );
-    // Never collapses to zero — a shoulder seam must remain drawable.
-    expect(seam).toBeGreaterThanOrEqual(4);
-  });
+  it.each(BODICE_BUILDERS)(
+    "$name clamps an absurdly small shoulder",
+    ({ fn }) => {
+      const block = fn({ chest: 33.07, waist: 23.62, shoulder: 0.39 });
+      const seam = Number(
+        block.notes
+          .find((n) => n.startsWith("Shoulder seam:"))
+          ?.match(/Shoulder seam: ([\d.]+)/)?.[1],
+      );
+      // Never collapses to zero — a shoulder seam must remain drawable.
+      expect(seam).toBeGreaterThanOrEqual(1.57);
+    },
+  );
 });
 
 describe("pattern engine — every standard UK size stays valid", () => {
