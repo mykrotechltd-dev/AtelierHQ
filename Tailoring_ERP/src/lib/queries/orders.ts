@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
-import type { Customer, Measurements, Order, OrderItem, OrderMaterial, OrderStatus } from "../supabase/types.ts";
+import type {
+  Customer,
+  Measurements,
+  Order,
+  OrderItem,
+  OrderMaterial,
+  OrderStatus,
+} from "../supabase/types.ts";
 import { usePaginatedQuery } from "./pagination.ts";
 
 function mapOrder(row: Record<string, unknown>): Order {
@@ -55,10 +62,12 @@ export function useOrders(status: OrderStatus | undefined, pageSize = 20) {
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...mapOrder(row),
-        customerName: (row.customers as unknown as { name: string } | null)?.name ?? "Unknown",
+        customerName:
+          (row.customers as unknown as { name: string } | null)?.name ??
+          "Unknown",
       }));
     },
-    pageSize
+    pageSize,
   );
 }
 
@@ -67,9 +76,14 @@ export type OrderItemWithMaterials = OrderItem & {
   materialCostTotal: number;
 };
 
-export function useOrder(
-  id: string | undefined
-): (Order & { customer: Customer | null; items: OrderItemWithMaterials[]; materialCostTotal: number }) | null | undefined {
+export function useOrder(id: string | undefined):
+  | (Order & {
+      customer: Customer | null;
+      items: OrderItemWithMaterials[];
+      materialCostTotal: number;
+    })
+  | null
+  | undefined {
   const query = useQuery({
     queryKey: ["order", id],
     queryFn: async () => {
@@ -88,7 +102,10 @@ export function useOrder(
 
       const itemIds = (itemRows ?? []).map((r) => r.id as string);
       const { data: materialRows, error: materialsError } = itemIds.length
-        ? await supabase.from("order_materials").select("*").in("order_item_id", itemIds)
+        ? await supabase
+            .from("order_materials")
+            .select("*")
+            .in("order_item_id", itemIds)
         : { data: [], error: null };
       if (materialsError) throw materialsError;
 
@@ -109,7 +126,10 @@ export function useOrder(
         };
       });
 
-      const customerRow = orderRow.customers as unknown as Record<string, unknown> | null;
+      const customerRow = orderRow.customers as unknown as Record<
+        string,
+        unknown
+      > | null;
       return {
         ...mapOrder(orderRow),
         customer: customerRow
@@ -120,11 +140,15 @@ export function useOrder(
               phone: (customerRow.phone as string) ?? null,
               email: (customerRow.email as string) ?? null,
               notes: (customerRow.notes as string) ?? null,
-              measurements: customerRow.measurements as Customer["measurements"],
+              measurements:
+                customerRow.measurements as Customer["measurements"],
             }
           : null,
         items,
-        materialCostTotal: items.reduce((sum, item) => sum + item.materialCostTotal, 0),
+        materialCostTotal: items.reduce(
+          (sum, item) => sum + item.materialCostTotal,
+          0,
+        ),
       };
     },
     enabled: !!id,
@@ -167,7 +191,11 @@ export function useCreateOrder() {
 export function useUpdateOrder() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { id: string; dueDate?: string; notes?: string }) => {
+    mutationFn: async (input: {
+      id: string;
+      dueDate?: string;
+      notes?: string;
+    }) => {
       const { error } = await supabase
         .from("orders")
         .update({ due_date: input.dueDate ?? null, notes: input.notes ?? null })
@@ -186,7 +214,9 @@ export function useAdvanceOrderStatus() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { error } = await supabase.rpc("advance_order_status", { p_order_id: input.id });
+      const { error } = await supabase.rpc("advance_order_status", {
+        p_order_id: input.id,
+      });
       if (error) throw error;
     },
     onSuccess: (_d, v) => {
@@ -202,7 +232,10 @@ export function useDeleteOrder() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { error } = await supabase.from("orders").delete().eq("id", input.id);
+      const { error } = await supabase
+        .from("orders")
+        .delete()
+        .eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
@@ -302,7 +335,8 @@ export function useAddMaterial() {
       });
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
+    onSuccess: (_d, v) =>
+      qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
   });
   return mutateAsync;
 }
@@ -327,7 +361,8 @@ export function useUpdateMaterial() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
+    onSuccess: (_d, v) =>
+      qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
   });
   return mutateAsync;
 }
@@ -336,10 +371,14 @@ export function useDeleteMaterial() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string; orderId: string }) => {
-      const { error } = await supabase.from("order_materials").delete().eq("id", input.id);
+      const { error } = await supabase
+        .from("order_materials")
+        .delete()
+        .eq("id", input.id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
+    onSuccess: (_d, v) =>
+      qc.invalidateQueries({ queryKey: ["order", v.orderId] }),
   });
   return mutateAsync;
 }

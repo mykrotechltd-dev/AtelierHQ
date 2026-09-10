@@ -15,12 +15,17 @@ function mapPayment(row: Record<string, unknown>): Payment {
     paidAt: row.paid_at as string,
     externalReference: (row.external_reference as string) ?? null,
     chargedCurrency: (row.charged_currency as string) ?? null,
-    chargedAmount: row.charged_amount === null || row.charged_amount === undefined ? null : Number(row.charged_amount),
+    chargedAmount:
+      row.charged_amount === null || row.charged_amount === undefined
+        ? null
+        : Number(row.charged_amount),
   };
 }
 
 export function usePayments(pageSize = 20) {
-  return usePaginatedQuery<Payment & { customerName: string; orderNumber: string; orderTotal: number }>(
+  return usePaginatedQuery<
+    Payment & { customerName: string; orderNumber: string; orderTotal: number }
+  >(
     ["payments"],
     async (offset, limit) => {
       const { data, error } = await supabase
@@ -31,18 +36,31 @@ export function usePayments(pageSize = 20) {
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...mapPayment(row),
-        customerName: (row.customers as unknown as { name: string } | null)?.name ?? "Unknown",
-        orderNumber: (row.orders as unknown as { order_number: string } | null)?.order_number ?? "—",
-        orderTotal: Number((row.orders as unknown as { total_amount: number } | null)?.total_amount ?? 0),
+        customerName:
+          (row.customers as unknown as { name: string } | null)?.name ??
+          "Unknown",
+        orderNumber:
+          (row.orders as unknown as { order_number: string } | null)
+            ?.order_number ?? "—",
+        orderTotal: Number(
+          (row.orders as unknown as { total_amount: number } | null)
+            ?.total_amount ?? 0,
+        ),
       }));
     },
-    pageSize
+    pageSize,
   );
 }
 
-export function usePaymentsByOrder(
-  orderId: string | undefined
-): { payments: Payment[]; totalPaid: number; outstanding: number; overpaid: boolean; orderTotal: number } | undefined {
+export function usePaymentsByOrder(orderId: string | undefined):
+  | {
+      payments: Payment[];
+      totalPaid: number;
+      outstanding: number;
+      overpaid: boolean;
+      orderTotal: number;
+    }
+  | undefined {
   const query = useQuery({
     queryKey: ["paymentsByOrder", orderId],
     queryFn: async () => {
@@ -81,14 +99,21 @@ export function useOutstandingSummary() {
   const query = useQuery({
     queryKey: ["outstandingSummary"],
     queryFn: async () => {
-      const { data: orders, error: ordersError } = await supabase.from("orders").select("id, total_amount");
+      const { data: orders, error: ordersError } = await supabase
+        .from("orders")
+        .select("id, total_amount");
       if (ordersError) throw ordersError;
-      const { data: payments, error: paymentsError } = await supabase.from("payments").select("order_id, amount");
+      const { data: payments, error: paymentsError } = await supabase
+        .from("payments")
+        .select("order_id, amount");
       if (paymentsError) throw paymentsError;
 
       const paidByOrder = new Map<string, number>();
       for (const p of payments ?? []) {
-        paidByOrder.set(p.order_id, (paidByOrder.get(p.order_id) ?? 0) + Number(p.amount));
+        paidByOrder.set(
+          p.order_id,
+          (paidByOrder.get(p.order_id) ?? 0) + Number(p.amount),
+        );
       }
 
       let totalBilled = 0;
@@ -104,7 +129,12 @@ export function useOutstandingSummary() {
         totalOutstanding += outstanding;
         if (outstanding > 0) ordersWithBalance++;
       }
-      return { totalBilled, totalCollected, totalOutstanding, ordersWithBalance };
+      return {
+        totalBilled,
+        totalCollected,
+        totalOutstanding,
+        ordersWithBalance,
+      };
     },
   });
   return query.isLoading ? undefined : query.data;
@@ -113,7 +143,13 @@ export function useOutstandingSummary() {
 export function useRecordPayment() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
-    mutationFn: async (input: { orderId: string; amount: number; method: PaymentMethod; notes?: string; paidAt: string }) => {
+    mutationFn: async (input: {
+      orderId: string;
+      amount: number;
+      method: PaymentMethod;
+      notes?: string;
+      paidAt: string;
+    }) => {
       const { data, error } = await supabase.rpc("record_payment", {
         p_order_id: input.orderId,
         p_amount: input.amount,
@@ -141,9 +177,12 @@ export function useRecordPayment() {
  *  client, so an abandoned checkout leaves no record. */
 export function useCreateFincraCheckout() {
   return async (input: { orderId: string; amount: number }) => {
-    const { data, error } = await supabase.functions.invoke("fincra-checkout/initiate", {
-      body: { orderId: input.orderId, amount: input.amount },
-    });
+    const { data, error } = await supabase.functions.invoke(
+      "fincra-checkout/initiate",
+      {
+        body: { orderId: input.orderId, amount: input.amount },
+      },
+    );
     if (error) throw error;
     return (data as { url: string }).url;
   };
@@ -153,7 +192,12 @@ export function useDeletePayment() {
   const qc = useQueryClient();
   const { mutateAsync } = useMutation({
     mutationFn: async (input: { id: string }) => {
-      const { data, error } = await supabase.from("payments").delete().eq("id", input.id).select("order_id").single();
+      const { data, error } = await supabase
+        .from("payments")
+        .delete()
+        .eq("id", input.id)
+        .select("order_id")
+        .single();
       if (error) throw error;
       return data.order_id as string;
     },
