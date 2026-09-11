@@ -156,8 +156,11 @@ export default function CustomerDialog({
       }
       form.reset();
       onClose();
-    } catch {
-      toast.error("Failed to save customer");
+    } catch (err) {
+      console.error("Failed to save customer:", err);
+      const message =
+        err instanceof Error ? err.message : "Failed to save customer";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
