@@ -869,6 +869,324 @@ begin
 end;
 $$;
 
+-- ----------------------------------------------------------------------------
+-- ADMIN ACCESS LOG
+-- Append-only audit trail for every platform-admin read below. No
+-- client-facing policies: only log_admin_access() (security definer) ever
+-- writes to it, and nothing reads it back through the client yet — a future
+-- "admin activity" view would get its own audited RPC, matching the pattern
+-- established here, rather than a raw select policy.
+-- ----------------------------------------------------------------------------
+create table admin_access_log (
+  id          bigint generated always as identity primary key,
+  admin_id    uuid not null references platform_admins(id) on delete cascade,
+  action      text not null,
+  detail      text,
+  row_count   int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index admin_access_log_admin_idx on admin_access_log(admin_id, created_at desc);
+
+create or replace function log_admin_access(p_action text, p_detail text, p_row_count int)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into admin_access_log (admin_id, action, detail, row_count)
+  values (auth.uid(), p_action, p_detail, p_row_count);
+$$;
+
+-- ----------------------------------------------------------------------------
+-- PLATFORM ADMIN READS
+-- Every admin list/search view reads through one of these — security
+-- definer (bypasses RLS, so no `_admin_select` policy is needed on the
+-- underlying tables at all), gated by is_platform_admin(), and logged via
+-- log_admin_access(). Each returns exactly what its page displays; the
+-- Clients page's whole purpose is showing phone/email/measurements, so
+-- those aren't stripped, but every read of them is now impossible to reach
+-- except through one checked, audited function.
+-- ----------------------------------------------------------------------------
+create or replace function admin_list_clients(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', c.id,
+    'tenantId', c.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'name', c.name,
+    'phone', c.phone,
+    'email', c.email,
+    'measurements', c.measurements
+  ) order by c.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from customers
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) c
+  left join tenants t on t.id = c.tenant_id;
+
+  perform log_admin_access('list_clients', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_list_orders(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id,
+    'tenantId', o.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'orderNumber', o.order_number,
+    'status', o.status,
+    'dueDate', o.due_date,
+    'totalAmount', o.total_amount,
+    'customerName', coalesce(c.name, 'Unknown'),
+    'garmentTypes', coalesce((
+      select jsonb_agg(distinct oi.garment_type)
+      from order_items oi
+      where oi.order_id = o.id and oi.garment_type is not null
+    ), '[]'::jsonb)
+  ) order by o.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from orders
+    where p_search is null or p_search = '' or order_number ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) o
+  left join tenants t on t.id = o.tenant_id
+  left join customers c on c.id = o.customer_id;
+
+  perform log_admin_access('list_orders', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_schedule(p_range_start date, p_range_end date)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fittings jsonb;
+  v_deliveries jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', f.id,
+    'tenantId', f.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'customerName', coalesce(c.name, 'Unknown'),
+    'scheduledAt', f.scheduled_at,
+    'status', f.status,
+    'notes', f.notes
+  ) order by f.scheduled_at asc), '[]'::jsonb)
+  into v_fittings
+  from fittings f
+  left join tenants t on t.id = f.tenant_id
+  left join customers c on c.id = f.customer_id
+  where f.scheduled_at >= p_range_start and f.scheduled_at < p_range_end;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id,
+    'tenantId', o.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'orderNumber', o.order_number,
+    'customerName', coalesce(c.name, 'Unknown'),
+    'dueDate', o.due_date,
+    'status', o.status
+  ) order by o.due_date asc), '[]'::jsonb)
+  into v_deliveries
+  from orders o
+  left join tenants t on t.id = o.tenant_id
+  left join customers c on c.id = o.customer_id
+  where o.due_date >= p_range_start and o.due_date < p_range_end;
+
+  perform log_admin_access(
+    'schedule',
+    p_range_start::text || '..' || p_range_end::text,
+    jsonb_array_length(v_fittings) + jsonb_array_length(v_deliveries)
+  );
+
+  return jsonb_build_object('fittings', v_fittings, 'deliveries', v_deliveries);
+end;
+$$;
+
+create or replace function admin_list_inventory(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', i.id,
+    'tenantId', i.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'name', i.name,
+    'category', i.category,
+    'unit', i.unit,
+    'quantityOnHand', i.quantity_on_hand,
+    'reorderThreshold', i.reorder_threshold
+  ) order by i.quantity_on_hand asc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from inventory_items
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by quantity_on_hand asc
+    offset p_offset limit p_limit
+  ) i
+  left join tenants t on t.id = i.tenant_id;
+
+  perform log_admin_access('list_inventory', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_list_staff(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', w.id,
+    'tenantId', w.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'name', w.name,
+    'specialization', w.specialization,
+    'isActive', w.is_active,
+    'pendingTasks', coalesce(ts.pending, 0),
+    'inProgressTasks', coalesce(ts.in_progress, 0),
+    'doneTasks', coalesce(ts.done, 0),
+    'activeTaskDescriptions', coalesce(ts.active_descriptions, '[]'::jsonb)
+  ) order by w.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from workers
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) w
+  left join tenants t on t.id = w.tenant_id
+  left join lateral (
+    select
+      count(*) filter (where task.status = 'pending') as pending,
+      count(*) filter (where task.status = 'in_progress') as in_progress,
+      count(*) filter (where task.status = 'done') as done,
+      (
+        select coalesce(jsonb_agg(d order by ord), '[]'::jsonb)
+        from (
+          select description as d, row_number() over () as ord
+          from tasks
+          where tasks.worker_id = w.id and tasks.status != 'done'
+          limit 3
+        ) top3
+      ) as active_descriptions
+    from tasks task
+    where task.worker_id = w.id
+  ) ts on true;
+
+  perform log_admin_access('list_staff', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_quick_search(p_term text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_orders jsonb;
+  v_clients jsonb;
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'kind', 'order',
+    'id', o.id,
+    'tenantId', o.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'title', o.order_number,
+    'subtitle', coalesce(c.name, '')
+  )), '[]'::jsonb)
+  into v_orders
+  from (
+    select * from orders
+    where order_number ilike '%' || p_term || '%'
+    limit 5
+  ) o
+  left join tenants t on t.id = o.tenant_id
+  left join customers c on c.id = o.customer_id;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'kind', 'client',
+    'id', c.id,
+    'tenantId', c.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'title', c.name,
+    'subtitle', 'Client'
+  )), '[]'::jsonb)
+  into v_clients
+  from (
+    select * from customers
+    where name ilike '%' || p_term || '%'
+    limit 5
+  ) c
+  left join tenants t on t.id = c.tenant_id;
+
+  v_result := v_orders || v_clients;
+  perform log_admin_access('quick_search', p_term, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
@@ -894,6 +1212,7 @@ alter table fincra_settings   enable row level security;
 alter table inventory_items   enable row level security;
 alter table fittings          enable row level security;
 alter table platform_admins   enable row level security;
+alter table admin_access_log  enable row level security;
 -- no policies on platform_admins: only is_platform_admin() and
 -- get_platform_admin_dashboard_stats() (both security definer) read it
 
@@ -949,28 +1268,10 @@ create policy fittings_all on fittings
   for all using (tenant_id = current_tenant_id())
   with check (tenant_id = current_tenant_id());
 
--- ----------------------------------------------------------------------------
--- Platform-admin read access — additive, read-only permissive policies.
--- These sit alongside each table's existing tenant-scoped policy (Postgres
--- OR's permissive policies together), so tenant isolation for normal tenant
--- sessions is unchanged. Only a session whose auth.uid() is in
--- platform_admins gains anything here.
--- ----------------------------------------------------------------------------
-create policy tenants_admin_select on tenants
-  for select using (is_platform_admin());
-create policy customers_admin_select on customers
-  for select using (is_platform_admin());
-create policy orders_admin_select on orders
-  for select using (is_platform_admin());
-create policy order_items_admin_select on order_items
-  for select using (is_platform_admin());
-create policy workers_admin_select on workers
-  for select using (is_platform_admin());
-create policy tasks_admin_select on tasks
-  for select using (is_platform_admin());
-create policy payments_admin_select on payments
-  for select using (is_platform_admin());
-create policy inventory_items_admin_select on inventory_items
-  for select using (is_platform_admin());
-create policy fittings_admin_select on fittings
-  for select using (is_platform_admin());
+-- Platform-admin reads do NOT get a raw RLS select policy here — every one
+-- of them is a purpose-built, audited, security-definer RPC instead (see
+-- ADMIN ACCESS LOG / admin_list_*/admin_schedule/admin_quick_search below),
+-- so nothing with an authenticated client can read across tenants except
+-- through those checked, logged functions. See
+-- supabase/migrations/0005_admin_audit_scoped_access.sql for why this
+-- replaced an earlier, broader set of `_admin_select` policies.

@@ -11,12 +11,14 @@ import { supabase } from "../../lib/supabase/client.ts";
 // RPC, which runs security definer so the anon key can call it without
 // itself being able to read platform_admins).
 //
-// Deliberately only three states, not a fourth "forbidden" one: signing a
-// non-admin session out fires another onAuthStateChange(null) through this
-// same effect, which would immediately overwrite a "forbidden" state with
-// "unauthenticated" anyway. The login page owns its own error message
-// instead of trusting this context to hold a transient rejection reason.
-type AdminStatus = "loading" | "authenticated" | "unauthenticated";
+// Never call supabase.auth.signOut() from anywhere in this file: it's the
+// same client/session the tenant-facing AuthProvider wraps around the
+// entire app, so signing out here would log a tenant owner or worker out
+// of their own, completely unrelated shop session the moment they land on
+// (or are sent a link to) any /admin/* route. A valid-but-non-admin login
+// is a "forbidden" state, not a reason to end anyone's session.
+type AdminStatus =
+  "loading" | "authenticated" | "unauthenticated" | "forbidden";
 
 interface AdminSessionContextValue {
   session: Session | null;
@@ -28,17 +30,23 @@ const AdminSessionContext = createContext<AdminSessionContextValue>({
   status: "loading",
 });
 
+/**
+ * Retries once before concluding "not admin" — an RPC error (network blip,
+ * transient Supabase hiccup) is not the same fact as a confirmed non-admin
+ * session, and treating it identically risked (before this file stopped
+ * signing sessions out) forcibly logging out a real admin over a passing
+ * network error. Still fails closed after the retry: never grant admin
+ * access on an ambiguous result.
+ */
 export async function checkIsPlatformAdmin(): Promise<boolean> {
-  const { data, error } = await supabase.rpc("is_platform_admin");
-  if (error) return false;
-  return data === true;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.rpc("is_platform_admin");
+    if (!error) return data === true;
+  }
+  return false;
 }
 
-export function AdminAuthProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<AdminStatus>("loading");
 
@@ -56,9 +64,11 @@ export function AdminAuthProvider({
       const isAdmin = await checkIsPlatformAdmin();
       if (cancelled) return;
       if (!isAdmin) {
-        // A real, valid login — just not a platform admin. Don't leave a
-        // non-admin session sitting authenticated against the admin app.
-        await supabase.auth.signOut();
+        // A real, valid login — just not a platform admin. The session is
+        // left exactly as it was; only this admin context's own status
+        // reflects the rejection.
+        setSession(newSession);
+        setStatus("forbidden");
         return;
       }
       setSession(newSession);

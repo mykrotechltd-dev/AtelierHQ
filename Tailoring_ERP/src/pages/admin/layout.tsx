@@ -1,13 +1,40 @@
 import { useEffect } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { ShieldAlert } from "lucide-react";
 import {
   AdminAuthProvider,
   useAdminSession,
 } from "@/components/providers/admin-auth.tsx";
+import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import AdminSidebar from "./_components/admin-sidebar.tsx";
 import AdminMobileNav from "./_components/admin-mobile-nav.tsx";
 import AdminHeader from "./_components/admin-header.tsx";
+
+/** Shown when a real, logged-in session isn't a platform admin. Distinct
+ *  from "unauthenticated" on purpose: this person is genuinely signed in
+ *  (quite possibly as a tenant owner or worker) — they don't need a login
+ *  form, they need to know why they can't see this and a way back to the
+ *  app they actually have access to. */
+function AccessDenied() {
+  return (
+    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-center">
+      <ShieldAlert className="size-10 text-destructive" />
+      <div>
+        <h1 className="font-sans text-xl font-semibold text-foreground">
+          Access denied
+        </h1>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Your account is signed in, but it doesn't have platform admin access.
+          This area is for AtelierHQ staff only.
+        </p>
+      </div>
+      <Button asChild>
+        <Link to="/dashboard">Go to your dashboard</Link>
+      </Button>
+    </div>
+  );
+}
 
 function AdminShell() {
   const navigate = useNavigate();
@@ -19,6 +46,10 @@ function AdminShell() {
       navigate("/admin/login", { replace: true });
     }
   }, [status, navigate]);
+
+  if (status === "forbidden") {
+    return <AccessDenied />;
+  }
 
   if (status !== "authenticated") {
     return (

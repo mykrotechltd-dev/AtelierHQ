@@ -45,7 +45,12 @@ export default function AdminLogin() {
 
     const isAdmin = await checkIsPlatformAdmin();
     if (!isAdmin) {
-      await supabase.auth.signOut();
+      // Do not sign out: this is the same Supabase client/session the
+      // tenant-facing app uses, and these credentials may well belong to a
+      // real, currently-logged-in shop owner in another tab. Rejecting the
+      // admin login must not end their unrelated session — it already
+      // authenticated as themselves, exactly as /login would; they simply
+      // don't get into /admin.
       setLoading(false);
       setError("This login is for AtelierHQ staff only.");
       return;
