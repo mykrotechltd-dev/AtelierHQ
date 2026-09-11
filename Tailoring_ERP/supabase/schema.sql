@@ -14,6 +14,8 @@ create type user_role      as enum ('owner', 'worker');
 create type order_status   as enum ('received', 'in_progress', 'completed', 'delivered');
 create type task_status    as enum ('pending', 'in_progress', 'done');
 create type payment_method as enum ('cash', 'bank_transfer', 'card', 'other', 'stripe', 'fincra');
+create type inventory_category as enum ('fabric', 'thread', 'button', 'other');
+create type fitting_status as enum ('scheduled', 'completed', 'cancelled');
 
 -- ----------------------------------------------------------------------------
 -- TENANTS  (one row per tailoring business)
@@ -232,6 +234,63 @@ create table fincra_settings (
   updated_at      timestamptz not null default now()
 );
 
+-- ----------------------------------------------------------------------------
+-- INVENTORY ITEMS  (shop-wide raw material stock, distinct from
+-- order_materials' per-order bill of materials)
+-- ----------------------------------------------------------------------------
+create table inventory_items (
+  id                 uuid primary key default gen_random_uuid(),
+  tenant_id          uuid not null default current_tenant_id() references tenants(id) on delete cascade,
+  name               text not null,
+  category           inventory_category not null default 'other',
+  unit               text not null default 'unit',
+  quantity_on_hand   numeric(12,2) not null default 0,
+  reorder_threshold  numeric(12,2) not null default 0,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+create index inventory_items_tenant_idx on inventory_items(tenant_id);
+
+-- ----------------------------------------------------------------------------
+-- FITTINGS  (fitting appointments; separate from orders.due_date, which is
+-- the delivery date)
+-- ----------------------------------------------------------------------------
+create table fittings (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_id     uuid not null default current_tenant_id() references tenants(id) on delete cascade,
+  customer_id   uuid not null references customers(id) on delete cascade,
+  order_id      uuid references orders(id) on delete set null,
+  scheduled_at  timestamptz not null,
+  status        fitting_status not null default 'scheduled',
+  notes         text,
+  created_at    timestamptz not null default now()
+);
+create index fittings_tenant_idx on fittings(tenant_id);
+create index fittings_scheduled_idx on fittings(tenant_id, scheduled_at);
+
+-- ----------------------------------------------------------------------------
+-- PLATFORM ADMINS  (the SaaS operator's own staff — not a tenant user, has
+-- no tenant_id, never granted through tenant signup/onboarding). RLS is
+-- enabled with ZERO client-facing policies: only is_platform_admin() and
+-- get_platform_admin_dashboard_stats() (both security definer) ever read it.
+-- ----------------------------------------------------------------------------
+create table platform_admins (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  full_name   text,
+  email       text,
+  created_at  timestamptz not null default now()
+);
+
+create or replace function is_platform_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (select 1 from platform_admins where id = auth.uid());
+$$;
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -251,6 +310,8 @@ create trigger trg_customers_updated_at before update on customers
 create trigger trg_orders_updated_at before update on orders
   for each row execute function set_updated_at();
 create trigger trg_tasks_updated_at before update on tasks
+  for each row execute function set_updated_at();
+create trigger trg_inventory_items_updated_at before update on inventory_items
   for each row execute function set_updated_at();
 
 -- recompute orders.total_amount whenever order_items change
@@ -730,6 +791,84 @@ as $$
   where w.tenant_id = current_tenant_id();
 $$;
 
+-- ----------------------------------------------------------------------------
+-- PLATFORM ADMIN DASHBOARD METRICS
+-- security definer + explicit is_platform_admin() check (mirrors the
+-- ownership check in set_fincra_settings()) — this function bypasses RLS
+-- entirely, same as every other security-definer function in this schema,
+-- so the admin gate below is the only thing standing between it and every
+-- tenant's data.
+--
+-- Revenue is grouped by tenant currency rather than summed into one number:
+-- tenants.currency varies per shop, so adding raw amounts across currencies
+-- would silently blend unrelated units.
+-- ----------------------------------------------------------------------------
+create or replace function get_platform_admin_dashboard_stats()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_revenue jsonb;
+  v_active_orders int;
+  v_fittings_today int;
+  v_fittings_week int;
+  v_low_inventory int;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'currency', currency,
+    'today', today,
+    'week', week,
+    'month', month
+  ) order by month desc), '[]'::jsonb)
+  into v_revenue
+  from (
+    select
+      t.currency,
+      coalesce(sum(p.amount) filter (where p.paid_at >= date_trunc('day', now())), 0) as today,
+      coalesce(sum(p.amount) filter (where p.paid_at >= date_trunc('week', now())), 0) as week,
+      coalesce(sum(p.amount) filter (where p.paid_at >= date_trunc('month', now())), 0) as month
+    from payments p
+    join tenants t on t.id = p.tenant_id
+    group by t.currency
+  ) rev;
+
+  select count(*) into v_active_orders
+  from orders
+  where status in ('received', 'in_progress');
+
+  select count(*) into v_fittings_today
+  from fittings
+  where status = 'scheduled'
+    and scheduled_at >= date_trunc('day', now())
+    and scheduled_at < date_trunc('day', now()) + interval '1 day';
+
+  select count(*) into v_fittings_week
+  from fittings
+  where status = 'scheduled'
+    and scheduled_at >= date_trunc('week', now())
+    and scheduled_at < date_trunc('week', now()) + interval '1 week';
+
+  select count(*) into v_low_inventory
+  from inventory_items
+  where quantity_on_hand <= reorder_threshold;
+
+  return jsonb_build_object(
+    'revenueByCurrency', v_revenue,
+    'activeOrders', v_active_orders,
+    'fittingsToday', v_fittings_today,
+    'fittingsThisWeek', v_fittings_week,
+    'lowInventoryCount', v_low_inventory
+  );
+end;
+$$;
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
@@ -752,6 +891,11 @@ alter table fincra_settings   enable row level security;
 -- set_fincra_settings() and read (non-secret fields only) via
 -- get_fincra_settings_public(), or by the fincra-checkout edge function
 -- using the service-role key, which bypasses RLS entirely
+alter table inventory_items   enable row level security;
+alter table fittings          enable row level security;
+alter table platform_admins   enable row level security;
+-- no policies on platform_admins: only is_platform_admin() and
+-- get_platform_admin_dashboard_stats() (both security definer) read it
 
 create policy tenants_select on tenants
   for select using (id = current_tenant_id());
@@ -796,3 +940,37 @@ create policy payments_all on payments
 create policy worker_payouts_all on worker_payouts
   for all using (tenant_id = current_tenant_id())
   with check (tenant_id = current_tenant_id());
+
+create policy inventory_items_all on inventory_items
+  for all using (tenant_id = current_tenant_id())
+  with check (tenant_id = current_tenant_id());
+
+create policy fittings_all on fittings
+  for all using (tenant_id = current_tenant_id())
+  with check (tenant_id = current_tenant_id());
+
+-- ----------------------------------------------------------------------------
+-- Platform-admin read access — additive, read-only permissive policies.
+-- These sit alongside each table's existing tenant-scoped policy (Postgres
+-- OR's permissive policies together), so tenant isolation for normal tenant
+-- sessions is unchanged. Only a session whose auth.uid() is in
+-- platform_admins gains anything here.
+-- ----------------------------------------------------------------------------
+create policy tenants_admin_select on tenants
+  for select using (is_platform_admin());
+create policy customers_admin_select on customers
+  for select using (is_platform_admin());
+create policy orders_admin_select on orders
+  for select using (is_platform_admin());
+create policy order_items_admin_select on order_items
+  for select using (is_platform_admin());
+create policy workers_admin_select on workers
+  for select using (is_platform_admin());
+create policy tasks_admin_select on tasks
+  for select using (is_platform_admin());
+create policy payments_admin_select on payments
+  for select using (is_platform_admin());
+create policy inventory_items_admin_select on inventory_items
+  for select using (is_platform_admin());
+create policy fittings_admin_select on fittings
+  for select using (is_platform_admin());
