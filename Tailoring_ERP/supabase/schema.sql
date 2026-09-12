@@ -14,6 +14,8 @@ create type user_role      as enum ('owner', 'worker');
 create type order_status   as enum ('received', 'in_progress', 'completed', 'delivered');
 create type task_status    as enum ('pending', 'in_progress', 'done');
 create type payment_method as enum ('cash', 'bank_transfer', 'card', 'other', 'stripe', 'fincra');
+create type inventory_category as enum ('fabric', 'thread', 'button', 'other');
+create type fitting_status as enum ('scheduled', 'completed', 'cancelled');
 
 -- ----------------------------------------------------------------------------
 -- TENANTS  (one row per tailoring business)
@@ -232,6 +234,63 @@ create table fincra_settings (
   updated_at      timestamptz not null default now()
 );
 
+-- ----------------------------------------------------------------------------
+-- INVENTORY ITEMS  (shop-wide raw material stock, distinct from
+-- order_materials' per-order bill of materials)
+-- ----------------------------------------------------------------------------
+create table inventory_items (
+  id                 uuid primary key default gen_random_uuid(),
+  tenant_id          uuid not null default current_tenant_id() references tenants(id) on delete cascade,
+  name               text not null,
+  category           inventory_category not null default 'other',
+  unit               text not null default 'unit',
+  quantity_on_hand   numeric(12,2) not null default 0,
+  reorder_threshold  numeric(12,2) not null default 0,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+create index inventory_items_tenant_idx on inventory_items(tenant_id);
+
+-- ----------------------------------------------------------------------------
+-- FITTINGS  (fitting appointments; separate from orders.due_date, which is
+-- the delivery date)
+-- ----------------------------------------------------------------------------
+create table fittings (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_id     uuid not null default current_tenant_id() references tenants(id) on delete cascade,
+  customer_id   uuid not null references customers(id) on delete cascade,
+  order_id      uuid references orders(id) on delete set null,
+  scheduled_at  timestamptz not null,
+  status        fitting_status not null default 'scheduled',
+  notes         text,
+  created_at    timestamptz not null default now()
+);
+create index fittings_tenant_idx on fittings(tenant_id);
+create index fittings_scheduled_idx on fittings(tenant_id, scheduled_at);
+
+-- ----------------------------------------------------------------------------
+-- PLATFORM ADMINS  (the SaaS operator's own staff — not a tenant user, has
+-- no tenant_id, never granted through tenant signup/onboarding). RLS is
+-- enabled with ZERO client-facing policies: only is_platform_admin() and
+-- get_platform_admin_dashboard_stats() (both security definer) ever read it.
+-- ----------------------------------------------------------------------------
+create table platform_admins (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  full_name   text,
+  email       text,
+  created_at  timestamptz not null default now()
+);
+
+create or replace function is_platform_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (select 1 from platform_admins where id = auth.uid());
+$$;
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -251,6 +310,8 @@ create trigger trg_customers_updated_at before update on customers
 create trigger trg_orders_updated_at before update on orders
   for each row execute function set_updated_at();
 create trigger trg_tasks_updated_at before update on tasks
+  for each row execute function set_updated_at();
+create trigger trg_inventory_items_updated_at before update on inventory_items
   for each row execute function set_updated_at();
 
 -- recompute orders.total_amount whenever order_items change
@@ -730,6 +791,402 @@ as $$
   where w.tenant_id = current_tenant_id();
 $$;
 
+-- ----------------------------------------------------------------------------
+-- PLATFORM ADMIN DASHBOARD METRICS
+-- security definer + explicit is_platform_admin() check (mirrors the
+-- ownership check in set_fincra_settings()) — this function bypasses RLS
+-- entirely, same as every other security-definer function in this schema,
+-- so the admin gate below is the only thing standing between it and every
+-- tenant's data.
+--
+-- Revenue is grouped by tenant currency rather than summed into one number:
+-- tenants.currency varies per shop, so adding raw amounts across currencies
+-- would silently blend unrelated units.
+-- ----------------------------------------------------------------------------
+create or replace function get_platform_admin_dashboard_stats()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_revenue jsonb;
+  v_active_orders int;
+  v_fittings_today int;
+  v_fittings_week int;
+  v_low_inventory int;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'currency', currency,
+    'today', today,
+    'week', week,
+    'month', month
+  ) order by month desc), '[]'::jsonb)
+  into v_revenue
+  from (
+    select
+      t.currency,
+      coalesce(sum(p.amount) filter (where p.paid_at >= date_trunc('day', now())), 0) as today,
+      coalesce(sum(p.amount) filter (where p.paid_at >= date_trunc('week', now())), 0) as week,
+      coalesce(sum(p.amount) filter (where p.paid_at >= date_trunc('month', now())), 0) as month
+    from payments p
+    join tenants t on t.id = p.tenant_id
+    group by t.currency
+  ) rev;
+
+  select count(*) into v_active_orders
+  from orders
+  where status in ('received', 'in_progress');
+
+  select count(*) into v_fittings_today
+  from fittings
+  where status = 'scheduled'
+    and scheduled_at >= date_trunc('day', now())
+    and scheduled_at < date_trunc('day', now()) + interval '1 day';
+
+  select count(*) into v_fittings_week
+  from fittings
+  where status = 'scheduled'
+    and scheduled_at >= date_trunc('week', now())
+    and scheduled_at < date_trunc('week', now()) + interval '1 week';
+
+  select count(*) into v_low_inventory
+  from inventory_items
+  where quantity_on_hand <= reorder_threshold;
+
+  return jsonb_build_object(
+    'revenueByCurrency', v_revenue,
+    'activeOrders', v_active_orders,
+    'fittingsToday', v_fittings_today,
+    'fittingsThisWeek', v_fittings_week,
+    'lowInventoryCount', v_low_inventory
+  );
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- ADMIN ACCESS LOG
+-- Append-only audit trail for every platform-admin read below. No
+-- client-facing policies: only log_admin_access() (security definer) ever
+-- writes to it, and nothing reads it back through the client yet — a future
+-- "admin activity" view would get its own audited RPC, matching the pattern
+-- established here, rather than a raw select policy.
+-- ----------------------------------------------------------------------------
+create table admin_access_log (
+  id          bigint generated always as identity primary key,
+  admin_id    uuid not null references platform_admins(id) on delete cascade,
+  action      text not null,
+  detail      text,
+  row_count   int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index admin_access_log_admin_idx on admin_access_log(admin_id, created_at desc);
+
+create or replace function log_admin_access(p_action text, p_detail text, p_row_count int)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into admin_access_log (admin_id, action, detail, row_count)
+  values (auth.uid(), p_action, p_detail, p_row_count);
+$$;
+
+-- ----------------------------------------------------------------------------
+-- PLATFORM ADMIN READS
+-- Every admin list/search view reads through one of these — security
+-- definer (bypasses RLS, so no `_admin_select` policy is needed on the
+-- underlying tables at all), gated by is_platform_admin(), and logged via
+-- log_admin_access(). Each returns exactly what its page displays; the
+-- Clients page's whole purpose is showing phone/email/measurements, so
+-- those aren't stripped, but every read of them is now impossible to reach
+-- except through one checked, audited function.
+-- ----------------------------------------------------------------------------
+create or replace function admin_list_clients(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', c.id,
+    'tenantId', c.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'name', c.name,
+    'phone', c.phone,
+    'email', c.email,
+    'measurements', c.measurements
+  ) order by c.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from customers
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) c
+  left join tenants t on t.id = c.tenant_id;
+
+  perform log_admin_access('list_clients', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_list_orders(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id,
+    'tenantId', o.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'orderNumber', o.order_number,
+    'status', o.status,
+    'dueDate', o.due_date,
+    'totalAmount', o.total_amount,
+    'customerName', coalesce(c.name, 'Unknown'),
+    'garmentTypes', coalesce((
+      select jsonb_agg(distinct oi.garment_type)
+      from order_items oi
+      where oi.order_id = o.id and oi.garment_type is not null
+    ), '[]'::jsonb)
+  ) order by o.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from orders
+    where p_search is null or p_search = '' or order_number ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) o
+  left join tenants t on t.id = o.tenant_id
+  left join customers c on c.id = o.customer_id;
+
+  perform log_admin_access('list_orders', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_schedule(p_range_start date, p_range_end date)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fittings jsonb;
+  v_deliveries jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', f.id,
+    'tenantId', f.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'customerName', coalesce(c.name, 'Unknown'),
+    'scheduledAt', f.scheduled_at,
+    'status', f.status,
+    'notes', f.notes
+  ) order by f.scheduled_at asc), '[]'::jsonb)
+  into v_fittings
+  from fittings f
+  left join tenants t on t.id = f.tenant_id
+  left join customers c on c.id = f.customer_id
+  where f.scheduled_at >= p_range_start and f.scheduled_at < p_range_end;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id,
+    'tenantId', o.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'orderNumber', o.order_number,
+    'customerName', coalesce(c.name, 'Unknown'),
+    'dueDate', o.due_date,
+    'status', o.status
+  ) order by o.due_date asc), '[]'::jsonb)
+  into v_deliveries
+  from orders o
+  left join tenants t on t.id = o.tenant_id
+  left join customers c on c.id = o.customer_id
+  where o.due_date >= p_range_start and o.due_date < p_range_end;
+
+  perform log_admin_access(
+    'schedule',
+    p_range_start::text || '..' || p_range_end::text,
+    jsonb_array_length(v_fittings) + jsonb_array_length(v_deliveries)
+  );
+
+  return jsonb_build_object('fittings', v_fittings, 'deliveries', v_deliveries);
+end;
+$$;
+
+create or replace function admin_list_inventory(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', i.id,
+    'tenantId', i.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'name', i.name,
+    'category', i.category,
+    'unit', i.unit,
+    'quantityOnHand', i.quantity_on_hand,
+    'reorderThreshold', i.reorder_threshold
+  ) order by i.quantity_on_hand asc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from inventory_items
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by quantity_on_hand asc
+    offset p_offset limit p_limit
+  ) i
+  left join tenants t on t.id = i.tenant_id;
+
+  perform log_admin_access('list_inventory', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_list_staff(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', w.id,
+    'tenantId', w.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'name', w.name,
+    'specialization', w.specialization,
+    'isActive', w.is_active,
+    'pendingTasks', coalesce(ts.pending, 0),
+    'inProgressTasks', coalesce(ts.in_progress, 0),
+    'doneTasks', coalesce(ts.done, 0),
+    'activeTaskDescriptions', coalesce(ts.active_descriptions, '[]'::jsonb)
+  ) order by w.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from workers
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) w
+  left join tenants t on t.id = w.tenant_id
+  left join lateral (
+    select
+      count(*) filter (where task.status = 'pending') as pending,
+      count(*) filter (where task.status = 'in_progress') as in_progress,
+      count(*) filter (where task.status = 'done') as done,
+      (
+        select coalesce(jsonb_agg(d order by ord), '[]'::jsonb)
+        from (
+          select description as d, row_number() over () as ord
+          from tasks
+          where tasks.worker_id = w.id and tasks.status != 'done'
+          limit 3
+        ) top3
+      ) as active_descriptions
+    from tasks task
+    where task.worker_id = w.id
+  ) ts on true;
+
+  perform log_admin_access('list_staff', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_quick_search(p_term text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_orders jsonb;
+  v_clients jsonb;
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'kind', 'order',
+    'id', o.id,
+    'tenantId', o.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'title', o.order_number,
+    'subtitle', coalesce(c.name, '')
+  )), '[]'::jsonb)
+  into v_orders
+  from (
+    select * from orders
+    where order_number ilike '%' || p_term || '%'
+    limit 5
+  ) o
+  left join tenants t on t.id = o.tenant_id
+  left join customers c on c.id = o.customer_id;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'kind', 'client',
+    'id', c.id,
+    'tenantId', c.tenant_id,
+    'tenantName', coalesce(t.name, 'Unknown shop'),
+    'title', c.name,
+    'subtitle', 'Client'
+  )), '[]'::jsonb)
+  into v_clients
+  from (
+    select * from customers
+    where name ilike '%' || p_term || '%'
+    limit 5
+  ) c
+  left join tenants t on t.id = c.tenant_id;
+
+  v_result := v_orders || v_clients;
+  perform log_admin_access('quick_search', p_term, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
@@ -752,6 +1209,12 @@ alter table fincra_settings   enable row level security;
 -- set_fincra_settings() and read (non-secret fields only) via
 -- get_fincra_settings_public(), or by the fincra-checkout edge function
 -- using the service-role key, which bypasses RLS entirely
+alter table inventory_items   enable row level security;
+alter table fittings          enable row level security;
+alter table platform_admins   enable row level security;
+alter table admin_access_log  enable row level security;
+-- no policies on platform_admins: only is_platform_admin() and
+-- get_platform_admin_dashboard_stats() (both security definer) read it
 
 create policy tenants_select on tenants
   for select using (id = current_tenant_id());
@@ -796,3 +1259,19 @@ create policy payments_all on payments
 create policy worker_payouts_all on worker_payouts
   for all using (tenant_id = current_tenant_id())
   with check (tenant_id = current_tenant_id());
+
+create policy inventory_items_all on inventory_items
+  for all using (tenant_id = current_tenant_id())
+  with check (tenant_id = current_tenant_id());
+
+create policy fittings_all on fittings
+  for all using (tenant_id = current_tenant_id())
+  with check (tenant_id = current_tenant_id());
+
+-- Platform-admin reads do NOT get a raw RLS select policy here — every one
+-- of them is a purpose-built, audited, security-definer RPC instead (see
+-- ADMIN ACCESS LOG / admin_list_*/admin_schedule/admin_quick_search below),
+-- so nothing with an authenticated client can read across tenants except
+-- through those checked, logged functions. See
+-- supabase/migrations/0005_admin_audit_scoped_access.sql for why this
+-- replaced an earlier, broader set of `_admin_select` policies.

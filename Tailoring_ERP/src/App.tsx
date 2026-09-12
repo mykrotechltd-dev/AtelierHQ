@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
 import Login from "./pages/auth/Login.tsx";
@@ -20,6 +20,14 @@ import PaymentsPage from "./pages/app/payments/page.tsx";
 import ReportsPage from "./pages/app/reports/page.tsx";
 import SettingsPage from "./pages/app/settings/page.tsx";
 import PatternsPage from "./pages/app/patterns/page.tsx";
+import AdminLogin from "./pages/admin/login.tsx";
+import AdminLayout from "./pages/admin/layout.tsx";
+import AdminDashboard from "./pages/admin/dashboard/page.tsx";
+import AdminOrdersPage from "./pages/admin/orders/page.tsx";
+import AdminClientsPage from "./pages/admin/clients/page.tsx";
+import AdminSchedulePage from "./pages/admin/schedule/page.tsx";
+import AdminInventoryPage from "./pages/admin/inventory/page.tsx";
+import AdminStaffPage from "./pages/admin/staff/page.tsx";
 
 export default function App() {
   return (
@@ -45,6 +53,19 @@ export default function App() {
             <Route path="/patterns" element={<PatternsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+
+          {/* Platform admin area — own login route + own auth context
+              (AdminAuthProvider), fully separate from tenant auth above. */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="clients" element={<AdminClientsPage />} />
+            <Route path="schedule" element={<AdminSchedulePage />} />
+            <Route path="inventory" element={<AdminInventoryPage />} />
+            <Route path="staff" element={<AdminStaffPage />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
