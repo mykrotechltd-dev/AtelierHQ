@@ -404,7 +404,7 @@ function ItemDialog({
                   ))}
                 </div>
                 {missingRequired.length > 0 && (
-                  <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-body">
+                  <p className="flex items-center gap-1 text-xs text-warning font-body">
                     <AlertTriangle className="size-3.5" />
                     Missing:{" "}
                     {missingRequired
@@ -682,8 +682,8 @@ export default function OrderDetailPage() {
         )}
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive" aria-label="Delete order">
-              <Trash2 className="size-3.5" />
+            <Button size="sm" variant="destructive">
+              <Trash2 className="size-3.5 mr-1" /> Delete
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
@@ -954,7 +954,7 @@ export default function OrderDetailPage() {
                         Job margin
                       </p>
                       <p
-                        className={`font-sans font-semibold text-sm ${jobMargin < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                        className={`font-sans font-semibold text-sm ${jobMargin < 0 ? "text-destructive" : "text-success"}`}
                       >
                         {jobMargin.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
@@ -1043,7 +1043,7 @@ export default function OrderDetailPage() {
                   <p className="text-xs font-body text-muted-foreground">
                     Paid
                   </p>
-                  <p className="font-sans font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                  <p className="font-sans font-semibold text-sm text-success">
                     {paymentSummary.totalPaid.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                     })}
@@ -1054,7 +1054,7 @@ export default function OrderDetailPage() {
                     Outstanding
                   </p>
                   <p
-                    className={`font-sans font-semibold text-sm ${paymentSummary.outstanding > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                    className={`font-sans font-semibold text-sm ${paymentSummary.outstanding > 0 ? "text-warning" : "text-success"}`}
                   >
                     {paymentSummary.outstanding.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -1062,7 +1062,7 @@ export default function OrderDetailPage() {
                   </p>
                 </div>
                 {paymentSummary.outstanding === 0 && (
-                  <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <div className="flex items-center gap-1 text-success">
                     <CheckCircle2 className="size-4" />
                     <span className="text-xs font-body font-medium">
                       Fully paid
@@ -1103,7 +1103,7 @@ export default function OrderDetailPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-sans font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                        <span className="font-sans font-semibold text-sm text-success">
                           +
                           {p.amount.toLocaleString(undefined, {
                             minimumFractionDigits: 2,

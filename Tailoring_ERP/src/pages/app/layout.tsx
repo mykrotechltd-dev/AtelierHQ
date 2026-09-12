@@ -34,7 +34,7 @@ function TrialBanner() {
 
   if (billing.daysLeft <= 7) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-amber-500/10 px-4 py-2 text-sm text-amber-700 dark:text-amber-400">
+      <div className="flex items-center justify-center gap-2 bg-warning/10 px-4 py-2 text-sm text-warning">
         {billing.daysLeft} day{billing.daysLeft === 1 ? "" : "s"} left in your
         free trial —{" "}
         <Link to="/billing" className="font-medium underline underline-offset-2">

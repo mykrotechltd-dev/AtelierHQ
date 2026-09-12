@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { ThemeToggle } from "@/components/theme-toggle.tsx";
 import {
   Tooltip,
   TooltipContent,
@@ -109,6 +110,7 @@ export default function AppSidebar({
           <Settings className="size-4 shrink-0" />
           Settings
         </NavLink>
+        <ThemeToggle />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

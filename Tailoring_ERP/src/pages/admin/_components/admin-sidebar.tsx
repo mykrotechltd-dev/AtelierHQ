@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAdminAuth } from "@/hooks/use-admin-auth.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { ThemeToggle } from "@/components/theme-toggle.tsx";
 
 const NAV_ITEMS = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
@@ -65,7 +66,8 @@ export default function AdminSidebar({
         ))}
       </nav>
 
-      <div className="px-2 py-3 border-t border-sidebar-border">
+      <div className="px-2 py-3 border-t border-sidebar-border space-y-0.5">
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"

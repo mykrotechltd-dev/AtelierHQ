@@ -100,10 +100,10 @@ export default function Dashboard() {
           {/* Outstanding alert */}
           {stats.totalOutstanding > 0 && (
             <div
-              className="flex items-center gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm cursor-pointer"
+              className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm cursor-pointer"
               onClick={() => navigate("/payments")}
             >
-              <AlertCircle className="size-4 text-yellow-500 shrink-0" />
+              <AlertCircle className="size-4 text-warning shrink-0" />
               <span className="text-foreground/80">
                 <strong className="text-foreground">
                   {fmt(stats.totalOutstanding, currency)}
@@ -121,16 +121,16 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {(
               [
-                { label: "Received", key: "received", color: "bg-blue-500" },
+                { label: "Received", key: "received", color: "bg-info" },
                 {
                   label: "In Progress",
                   key: "in_progress",
-                  color: "bg-amber-500",
+                  color: "bg-warning",
                 },
                 {
                   label: "Completed",
                   key: "completed",
-                  color: "bg-emerald-500",
+                  color: "bg-success",
                 },
                 {
                   label: "Delivered",
@@ -180,7 +180,7 @@ export default function Dashboard() {
                     dataKey="label"
                     tick={{
                       fontSize: 12,
-                      fill: "hsl(var(--muted-foreground))",
+                      fill: "var(--muted-foreground)",
                     }}
                     axisLine={false}
                     tickLine={false}
@@ -188,7 +188,7 @@ export default function Dashboard() {
                   <YAxis
                     tick={{
                       fontSize: 11,
-                      fill: "hsl(var(--muted-foreground))",
+                      fill: "var(--muted-foreground)",
                     }}
                     axisLine={false}
                     tickLine={false}
@@ -199,10 +199,10 @@ export default function Dashboard() {
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
                       borderRadius: 8,
-                      color: "hsl(var(--popover-foreground))",
+                      color: "var(--popover-foreground)",
                       fontSize: 12,
                     }}
                     formatter={(value, name) => [
@@ -212,13 +212,14 @@ export default function Dashboard() {
                   />
                   <Bar
                     dataKey="billed"
-                    fill="rgba(28,40,80,0.22)"
+                    fill="var(--primary)"
+                    fillOpacity={0.22}
                     radius={[4, 4, 0, 0]}
                     name="billed"
                   />
                   <Bar
                     dataKey="collected"
-                    fill="#1c2850"
+                    fill="var(--primary)"
                     radius={[4, 4, 0, 0]}
                     name="collected"
                   />

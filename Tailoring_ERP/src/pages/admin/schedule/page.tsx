@@ -163,9 +163,9 @@ export default function AdminSchedulePage() {
                             key={f.id}
                             className={cn(
                               "size-1.5 rounded-full",
-                              tone === "urgent" && "bg-red-500",
-                              tone === "progress" && "bg-yellow-500",
-                              tone === "complete" && "bg-green-500",
+                              tone === "urgent" && "bg-destructive",
+                              tone === "progress" && "bg-warning",
+                              tone === "complete" && "bg-success",
                             )}
                           />
                         );

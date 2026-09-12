@@ -855,27 +855,22 @@ function DraftWorkspace({
             </CardHeader>
             <CardContent className="space-y-3">
               {/* Source tabs */}
-              <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
-                {(
-                  [
-                    { id: "bespoke", label: "Bespoke" },
-                    { id: "customer", label: "Customer" },
-                    { id: "standard", label: "UK Size" },
-                  ] as { id: MeasSource; label: string }[]
-                ).map(({ id, label }) => (
-                  <button
-                    key={id}
-                    onClick={() => setMeasSource(id)}
-                    className={`cursor-pointer text-xs py-1.5 rounded-md transition-colors font-medium ${
-                      measSource === id
-                        ? "bg-background shadow-sm text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <Tabs
+                value={measSource}
+                onValueChange={(v) => setMeasSource(v as MeasSource)}
+              >
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="bespoke" className="text-xs">
+                    Bespoke
+                  </TabsTrigger>
+                  <TabsTrigger value="customer" className="text-xs">
+                    Customer
+                  </TabsTrigger>
+                  <TabsTrigger value="standard" className="text-xs">
+                    UK Size
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
 
               {/* Customer picker */}
               {measSource === "customer" && (

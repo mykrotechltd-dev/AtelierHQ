@@ -16,11 +16,14 @@ import { ClipboardList, CalendarDays, User } from "lucide-react";
 import { StatusBadge } from "./_components/status-badge.tsx";
 import { STATUS_CONFIG, type OrderStatus } from "@/lib/order-status.ts";
 import CreateOrderDialog from "./_components/create-order-dialog.tsx";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { cn } from "@/lib/utils.ts";
 import { format, parseISO } from "date-fns";
 
+// "all" stands in for `undefined` (no filter) — Radix Tabs needs a real
+// string value, and undefined isn't one.
 const STATUS_TABS = [
-  { value: undefined, label: "All" },
+  { value: "all", label: "All" },
   { value: "received", label: "Received" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
@@ -48,24 +51,25 @@ export default function OrdersPage() {
       </PageHeader>
 
       {/* Status filter tabs */}
-      <div className="flex gap-1 mb-6 overflow-x-auto pb-1">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={String(tab.value)}
-            onClick={() =>
-              setStatusFilter(tab.value as OrderStatus | undefined)
-            }
-            className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-body whitespace-nowrap transition-colors cursor-pointer",
-              statusFilter === tab.value
-                ? "bg-primary text-primary-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted",
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={statusFilter ?? "all"}
+        onValueChange={(v) =>
+          setStatusFilter(v === "all" ? undefined : (v as OrderStatus))
+        }
+        className="mb-6"
+      >
+        <TabsList className="w-full justify-start overflow-x-auto">
+          {STATUS_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="text-xs whitespace-nowrap"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* List */}
       {status === "LoadingFirstPage" ? (
