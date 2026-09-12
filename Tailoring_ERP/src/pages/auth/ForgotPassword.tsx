@@ -1,44 +1,65 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Card } from "@/components/ui/card.tsx";
 
-export default function Login() {
-  const navigate = useNavigate();
+export default function ForgotPassword() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
-      password,
-    });
+      { redirectTo: `${window.location.origin}/auth/reset-password` },
+    );
 
     setLoading(false);
-    if (signInError) {
-      setError(signInError.message);
+    if (resetError) {
+      setError(resetError.message);
       return;
     }
-    navigate("/", { replace: true });
+    setSent(true);
   };
+
+  if (sent) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm p-8 text-center">
+          <h1 className="font-sans text-xl font-semibold text-foreground">
+            Check your email
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            If an account exists for <strong>{email}</strong>, we sent a link
+            to reset your password.
+          </p>
+          <Link
+            to="/login"
+            className="mt-6 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            Back to sign in
+          </Link>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm gap-0 p-8">
         <h1 className="font-sans text-2xl font-semibold text-foreground">
-          Sign in to AtelierHQ
+          Reset your password
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage your shop's orders, measurements and payments.
+          Enter your email and we'll send you a link to set a new password.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -52,39 +73,17 @@ export default function Login() {
               className="mt-1"
             />
           </div>
-          <div>
-            <div className="flex items-center justify-between">
-              <Label>Password</Label>
-              <Link
-                to="/auth/forgot-password"
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <Input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1"
-            />
-          </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Sending…" : "Send reset link"}
           </Button>
         </form>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          New shop?{" "}
-          <Link
-            to="/signup"
-            className="font-medium text-primary hover:underline"
-          >
-            Create an account
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Back to sign in
           </Link>
         </p>
       </Card>
