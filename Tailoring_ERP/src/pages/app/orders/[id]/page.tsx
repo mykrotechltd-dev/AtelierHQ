@@ -471,6 +471,7 @@ function ItemDialog({
                       <button
                         type="button"
                         onClick={() => removeMaterialLine(i)}
+                        aria-label="Remove material line"
                         className="text-destructive hover:text-destructive/80 cursor-pointer justify-self-center"
                       >
                         <Trash2 className="size-3.5" />
@@ -681,7 +682,7 @@ export default function OrderDetailPage() {
         )}
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive">
+            <Button size="sm" variant="destructive" aria-label="Delete order">
               <Trash2 className="size-3.5" />
             </Button>
           </AlertDialogTrigger>
@@ -842,13 +843,17 @@ export default function OrderDetailPage() {
                       setEditingItem(item);
                       setItemDialogOpen(true);
                     }}
+                    aria-label={`Edit ${item.description}`}
                     className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     <Pencil className="size-3.5" />
                   </button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <button className="text-destructive hover:text-destructive/80 cursor-pointer">
+                      <button
+                        aria-label={`Remove ${item.description}`}
+                        className="text-destructive hover:text-destructive/80 cursor-pointer"
+                      >
                         <Trash2 className="size-3.5" />
                       </button>
                     </AlertDialogTrigger>
@@ -1106,7 +1111,10 @@ export default function OrderDetailPage() {
                         </span>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <button className="text-destructive hover:text-destructive/80 cursor-pointer">
+                            <button
+                              aria-label="Delete payment"
+                              className="text-destructive hover:text-destructive/80 cursor-pointer"
+                            >
                               <Trash2 className="size-3.5" />
                             </button>
                           </AlertDialogTrigger>

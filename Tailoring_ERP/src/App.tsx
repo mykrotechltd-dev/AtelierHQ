@@ -21,6 +21,7 @@ import ReportsPage from "./pages/app/reports/page.tsx";
 import SettingsPage from "./pages/app/settings/page.tsx";
 import PatternsPage from "./pages/app/patterns/page.tsx";
 import BillingPage from "./pages/app/billing/page.tsx";
+import AppNotFound from "./pages/app/not-found.tsx";
 import { AdminAuthProvider } from "./components/providers/admin-auth.tsx";
 import AdminLogin from "./pages/admin/login.tsx";
 import AdminLayout from "./pages/admin/layout.tsx";
@@ -31,6 +32,7 @@ import AdminSchedulePage from "./pages/admin/schedule/page.tsx";
 import AdminInventoryPage from "./pages/admin/inventory/page.tsx";
 import AdminStaffPage from "./pages/admin/staff/page.tsx";
 import AdminShopsPage from "./pages/admin/shops/page.tsx";
+import AdminNotFound from "./pages/admin/not-found.tsx";
 
 export default function App() {
   return (
@@ -57,6 +59,7 @@ export default function App() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<AppNotFound />} />
           </Route>
 
           {/* Platform admin area — own auth context (AdminAuthProvider),
@@ -74,6 +77,7 @@ export default function App() {
               <Route path="inventory" element={<AdminInventoryPage />} />
               <Route path="staff" element={<AdminStaffPage />} />
               <Route path="shops" element={<AdminShopsPage />} />
+              <Route path="*" element={<AdminNotFound />} />
             </Route>
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

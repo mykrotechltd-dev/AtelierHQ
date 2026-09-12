@@ -92,6 +92,7 @@ export default function AdminSchedulePage() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Previous month"
             onClick={() => setMonthCursor((m) => subMonths(m, 1))}
           >
             <ChevronLeft className="size-4" />
@@ -102,6 +103,7 @@ export default function AdminSchedulePage() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Next month"
             onClick={() => setMonthCursor((m) => addMonths(m, 1))}
           >
             <ChevronRight className="size-4" />
