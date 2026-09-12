@@ -1,6 +1,10 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 
-type PaginationStatus = "LoadingFirstPage" | "CanLoadMore" | "Exhausted";
+type PaginationStatus =
+  | "LoadingFirstPage"
+  | "CanLoadMore"
+  | "Exhausted"
+  | "Error";
 
 /**
  * Adapter over useInfiniteQuery that mimics Convex's usePaginatedQuery shape
@@ -11,7 +15,13 @@ export function usePaginatedQuery<T>(
   queryKey: readonly unknown[],
   fetchPage: (offset: number, limit: number) => Promise<T[]>,
   pageSize: number,
-): { results: T[]; status: PaginationStatus; loadMore: () => void } {
+): {
+  results: T[];
+  status: PaginationStatus;
+  error: unknown;
+  loadMore: () => void;
+  retry: () => void;
+} {
   const query = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam }) => {
@@ -26,15 +36,22 @@ export function usePaginatedQuery<T>(
   });
 
   const results = query.data?.pages.flatMap((p) => p.items) ?? [];
-  const status: PaginationStatus = query.isLoading
-    ? "LoadingFirstPage"
-    : query.hasNextPage
-      ? "CanLoadMore"
-      : "Exhausted";
+  // isError must be checked before isLoading/hasNextPage: a failed fetch
+  // still leaves isLoading false and hasNextPage falsy, which previously
+  // fell through to "Exhausted" — indistinguishable from "no results".
+  const status: PaginationStatus = query.isError
+    ? "Error"
+    : query.isLoading
+      ? "LoadingFirstPage"
+      : query.hasNextPage
+        ? "CanLoadMore"
+        : "Exhausted";
 
   return {
     results,
     status,
+    error: query.error,
     loadMore: () => query.fetchNextPage(),
+    retry: () => query.refetch(),
   };
 }

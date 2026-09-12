@@ -15,7 +15,7 @@ export default function AdminHeader() {
   const [term, setTerm] = useState("");
   const [debouncedTerm] = useDebounce(term, 250);
   const [open, setOpen] = useState(false);
-  const results = useAdminQuickSearch(debouncedTerm);
+  const { results, isError } = useAdminQuickSearch(debouncedTerm);
 
   const go = (kind: "order" | "client") => {
     setOpen(false);
@@ -44,7 +44,11 @@ export default function AdminHeader() {
           className="w-[--radix-popover-trigger-width] max-w-sm p-1"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          {results.length === 0 ? (
+          {isError ? (
+            <p className="px-2 py-3 text-sm text-destructive">
+              Search failed — try again.
+            </p>
+          ) : results.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">
               No matches for "{debouncedTerm}"
             </p>

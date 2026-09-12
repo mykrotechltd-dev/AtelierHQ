@@ -52,17 +52,26 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // getSession() and onAuthStateChange can both kick off a resolve() at
+    // nearly the same time (e.g. a token refresh firing while the initial
+    // getSession() is still awaiting checkIsPlatformAdmin()). Since each
+    // resolve() awaits a real network round trip, they can finish out of
+    // order — without this token, an older call finishing last would
+    // overwrite the newer, already-current state. Only the resolve() whose
+    // token still matches `latest` when it finishes is allowed to apply.
+    let latest = 0;
 
     async function resolve(newSession: Session | null) {
+      const token = ++latest;
       if (!newSession) {
-        if (!cancelled) {
+        if (!cancelled && token === latest) {
           setSession(null);
           setStatus("unauthenticated");
         }
         return;
       }
       const isAdmin = await checkIsPlatformAdmin();
-      if (cancelled) return;
+      if (cancelled || token !== latest) return;
       if (!isAdmin) {
         // A real, valid login — just not a platform admin. The session is
         // left exactly as it was; only this admin context's own status

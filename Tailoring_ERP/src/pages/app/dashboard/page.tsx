@@ -3,6 +3,7 @@ import {
   useDashboardStats,
   useRevenueByMonth,
 } from "@/lib/queries/analytics.ts";
+import { formatCurrency as fmt } from "@/lib/format-currency.ts";
 import PageHeader from "@/components/page-header.tsx";
 import {
   Card,
@@ -29,14 +30,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
-function fmt(n: number, currency: string) {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: currency || "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
 
 export default function Dashboard() {
   const tenant = useMyTenant();

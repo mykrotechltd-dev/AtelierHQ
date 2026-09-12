@@ -2,6 +2,8 @@ import { useAdminDashboardStats } from "@/lib/queries/admin.ts";
 import PageHeader from "@/components/page-header.tsx";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { AdminErrorState } from "../_components/admin-error-state.tsx";
+import { formatCurrency as fmt } from "@/lib/format-currency.ts";
 import {
   Wallet,
   ClipboardList,
@@ -9,17 +11,8 @@ import {
   PackageMinus,
 } from "lucide-react";
 
-function fmt(n: number, currency: string) {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: currency || "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
 export default function AdminDashboard() {
-  const stats = useAdminDashboardStats();
-  const isLoading = stats === undefined;
+  const { stats, isLoading, isError, retry } = useAdminDashboardStats();
 
   const revenue = stats?.revenueByCurrency ?? [];
   const primary = [...revenue].sort((a, b) => b.month - a.month)[0];
@@ -40,7 +33,9 @@ export default function AdminDashboard() {
             <Skeleton key={i} className="h-28 w-full" />
           ))}
         </div>
-      ) : (
+      ) : isError ? (
+        <AdminErrorState onRetry={retry} />
+      ) : !stats ? null : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard
             label="Total Revenue"

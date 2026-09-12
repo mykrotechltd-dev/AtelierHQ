@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { format, parseISO } from "date-fns";
 import { useDebounce } from "@/hooks/use-debounce.ts";
-import { useAdminInventory } from "@/lib/queries/admin.ts";
-import { inventoryTone } from "../_lib/admin-tone.ts";
+import { useAdminTenants } from "@/lib/queries/admin.ts";
+import { useActivePlans } from "@/lib/queries/billing.ts";
+import { tenantAccessTone } from "../_lib/admin-tone.ts";
 import { AdminStatusBadge } from "../_components/admin-status-badge.tsx";
 import { AdminErrorState } from "../_components/admin-error-state.tsx";
+import OverrideSubscriptionDialog from "./_components/override-subscription-dialog.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -23,34 +26,30 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty.tsx";
-import { Boxes, Search } from "lucide-react";
+import { Store, Search } from "lucide-react";
+import type { AdminTenantRow } from "@/lib/supabase/admin-types.ts";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  fabric: "Fabric",
-  thread: "Thread",
-  button: "Button",
-  other: "Other",
-};
-
-export default function AdminInventoryPage() {
+export default function AdminShopsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
-  const { results, status, loadMore, retry } = useAdminInventory(
+  const { results, status, loadMore, retry } = useAdminTenants(
     debouncedSearch || undefined,
     20,
   );
+  const plans = useActivePlans();
+  const [editing, setEditing] = useState<AdminTenantRow | null>(null);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <PageHeader
-        title="Inventory"
-        description="Raw materials on hand across every shop."
+        title="Shops"
+        description="Every shop on AtelierHQ and its subscription status."
       />
 
       <div className="relative mb-6 max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input
-          placeholder="Search by material name…"
+          placeholder="Search by shop name…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -69,13 +68,13 @@ export default function AdminInventoryPage() {
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <Boxes />
+              <Store />
             </EmptyMedia>
-            <EmptyTitle>No inventory items found</EmptyTitle>
+            <EmptyTitle>No shops found</EmptyTitle>
             <EmptyDescription>
               {debouncedSearch
                 ? `No results for "${debouncedSearch}"`
-                : "No shop has logged inventory yet"}
+                : "No shop has signed up yet"}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -84,37 +83,50 @@ export default function AdminInventoryPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Material</TableHead>
                 <TableHead>Shop</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">On hand</TableHead>
-                <TableHead className="text-right">Reorder at</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Trial ends</TableHead>
+                <TableHead>Paid through</TableHead>
+                <TableHead>Signed up</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {results.map((item) => {
-                const { tone, label } = inventoryTone(
-                  item.quantityOnHand,
-                  item.reorderThreshold,
-                );
+              {results.map((t) => {
+                const { tone, label } = tenantAccessTone(t.accessState);
+                const planName =
+                  plans?.find((p) => p.code === t.planCode)?.name ??
+                  t.planCode ??
+                  "—";
                 return (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {item.tenantName}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {CATEGORY_LABELS[item.category] ?? item.category}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {item.quantityOnHand.toLocaleString()} {item.unit}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {item.reorderThreshold.toLocaleString()} {item.unit}
-                    </TableCell>
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell>
                       <AdminStatusBadge tone={tone} label={label} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {planName}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {format(parseISO(t.trialEndsAt), "dd MMM yyyy")}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {t.currentPeriodEnd
+                        ? format(parseISO(t.currentPeriodEnd), "dd MMM yyyy")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {format(parseISO(t.createdAt), "dd MMM yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditing(t)}
+                      >
+                        Manage
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -131,6 +143,11 @@ export default function AdminInventoryPage() {
           </Button>
         </div>
       )}
+
+      <OverrideSubscriptionDialog
+        tenant={editing}
+        onClose={() => setEditing(null)}
+      />
     </div>
   );
 }
