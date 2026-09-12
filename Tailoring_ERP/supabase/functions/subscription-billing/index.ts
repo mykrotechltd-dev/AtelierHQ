@@ -111,15 +111,21 @@ async function handleCheckout(req: Request) {
     );
   }
 
+  const { planCode } = (await req.json().catch(() => ({}))) as {
+    planCode?: string;
+  };
+  if (!planCode) {
+    return json({ error: "No plan selected" }, 400);
+  }
+
   const { data: plan, error: planError } = await admin
     .from("plans")
     .select("*")
+    .eq("code", planCode)
     .eq("is_active", true)
-    .order("code")
-    .limit(1)
     .maybeSingle();
   if (planError || !plan) {
-    return json({ error: "No active plan is configured" }, 500);
+    return json({ error: "That plan is not available" }, 400);
   }
 
   const reference = `sub-${caller.tenant.id}-${crypto.randomUUID()}`;

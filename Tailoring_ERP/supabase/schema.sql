@@ -763,19 +763,23 @@ begin
     raise exception 'No shop found for current user';
   end if;
 
-  select jsonb_build_object(
-    'code', p.code,
-    'name', p.name,
-    'amount', p.amount,
-    'currency', p.currency,
-    'intervalDays', p.interval_days
-  )
-  into v_plan
-  from plans p
-  where p.code = coalesce(
-    v_tenant.plan_code,
-    (select code from plans where is_active order by code limit 1)
-  );
+  -- No default plan here: with more than one active plan, guessing "first
+  -- by code" would silently misreport what a trialing shop will pay. `plan`
+  -- stays null until the shop has actually chosen or paid for one.
+  if v_tenant.plan_code is not null then
+    select jsonb_build_object(
+      'code', p.code,
+      'name', p.name,
+      'amount', p.amount,
+      'currency', p.currency,
+      'intervalDays', p.interval_days
+    )
+    into v_plan
+    from plans p
+    where p.code = v_tenant.plan_code;
+  else
+    v_plan := null;
+  end if;
 
   v_days_left := greatest(
     0,
@@ -1465,7 +1469,8 @@ $$;
 create or replace function admin_set_tenant_subscription(
   p_tenant_id uuid,
   p_status text,
-  p_period_end timestamptz
+  p_period_end timestamptz,
+  p_plan_code text default null
 )
 returns void
 language plpgsql
@@ -1481,9 +1486,14 @@ begin
     raise exception 'Invalid subscription status: %', p_status;
   end if;
 
+  if p_plan_code is not null and not exists (select 1 from plans where code = p_plan_code) then
+    raise exception 'Unknown plan code: %', p_plan_code;
+  end if;
+
   update tenants
   set subscription_status = p_status,
-      current_period_end = p_period_end
+      current_period_end = p_period_end,
+      plan_code = coalesce(p_plan_code, plan_code)
   where id = p_tenant_id;
 
   if not found then
@@ -1492,7 +1502,8 @@ begin
 
   perform log_admin_access(
     'set_tenant_subscription',
-    p_tenant_id::text || ' -> ' || p_status,
+    p_tenant_id::text || ' -> ' || p_status ||
+      case when p_plan_code is not null then ' (' || p_plan_code || ')' else '' end,
     1
   );
 end;

@@ -5,8 +5,10 @@ import {
   useBillingState,
   useSubscriptionInvoices,
   useStartSubscriptionCheckout,
+  useActivePlans,
 } from "@/lib/queries/billing.ts";
 import { formatCurrency } from "@/lib/format-currency.ts";
+import { cn } from "@/lib/utils.ts";
 import PageHeader from "@/components/page-header.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -25,13 +27,21 @@ import { CheckCircle2, Clock, ShieldAlert } from "lucide-react";
 export default function BillingPage() {
   const billing = useBillingState();
   const invoices = useSubscriptionInvoices();
+  const plans = useActivePlans();
   const startCheckout = useStartSubscriptionCheckout();
   const [redirecting, setRedirecting] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string | undefined>();
+
+  // Default the selection to the shop's current plan, or the cheapest
+  // option, until the user actively picks one — derived at render time
+  // rather than synced into state via an effect.
+  const effectivePlan = selectedPlan ?? billing?.plan?.code ?? plans?.[0]?.code;
 
   const handleSubscribe = async () => {
+    if (!effectivePlan) return;
     setRedirecting(true);
     try {
-      const url = await startCheckout();
+      const url = await startCheckout(effectivePlan);
       window.location.href = url;
     } catch (err) {
       setRedirecting(false);
@@ -82,27 +92,58 @@ export default function BillingPage() {
                 </p>
               )}
 
-              {billing.plan && (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-sm font-medium text-foreground">
-                    {billing.plan.name}
-                  </p>
-                  <p className="text-2xl font-bold font-display mt-1">
-                    {formatCurrency(billing.plan.amount, billing.plan.currency, 2)}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {" "}
-                      / {billing.plan.intervalDays} days
-                    </span>
-                  </p>
+              {plans === undefined ? (
+                <Skeleton className="h-20 w-full" />
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {plans.map((plan) => {
+                    const isCurrent = billing.plan?.code === plan.code;
+                    const isSelected = effectivePlan === plan.code;
+                    return (
+                      <button
+                        key={plan.code}
+                        type="button"
+                        onClick={() => setSelectedPlan(plan.code)}
+                        className={cn(
+                          "rounded-lg border p-3 text-left transition-colors",
+                          isSelected
+                            ? "border-primary ring-1 ring-primary"
+                            : "border-border hover:border-primary/50",
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-foreground">
+                            {plan.name}
+                          </p>
+                          {isCurrent && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Current
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-lg font-bold font-display mt-1">
+                          {formatCurrency(plan.amount, plan.currency, 2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          every {plan.intervalDays} days
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
-              <Button onClick={handleSubscribe} disabled={redirecting}>
+              <Button
+                onClick={handleSubscribe}
+                disabled={redirecting || !effectivePlan}
+              >
                 {redirecting
                   ? "Redirecting…"
-                  : billing.state === "active"
+                  : billing.state === "active" && effectivePlan === billing.plan?.code
                     ? "Renew now"
-                    : "Subscribe"}
+                    : billing.state === "active"
+                      ? "Switch plan"
+                      : "Subscribe"}
               </Button>
             </CardContent>
           </Card>

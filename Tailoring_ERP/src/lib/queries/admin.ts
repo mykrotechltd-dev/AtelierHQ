@@ -173,11 +173,13 @@ export function useAdminSetTenantSubscription() {
     tenantId: string;
     status: SubscriptionStatus;
     periodEnd: string | null;
+    planCode?: string;
   }) => {
     const { error } = await supabase.rpc("admin_set_tenant_subscription", {
       p_tenant_id: input.tenantId,
       p_status: input.status,
       p_period_end: input.periodEnd,
+      p_plan_code: input.planCode ?? null,
     });
     if (error) throw error;
     await qc.invalidateQueries({ queryKey: ["admin", "tenants"] });

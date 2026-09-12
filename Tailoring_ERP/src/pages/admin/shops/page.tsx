@@ -2,6 +2,7 @@ import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 import { useAdminTenants } from "@/lib/queries/admin.ts";
+import { useActivePlans } from "@/lib/queries/billing.ts";
 import { tenantAccessTone } from "../_lib/admin-tone.ts";
 import { AdminStatusBadge } from "../_components/admin-status-badge.tsx";
 import { AdminErrorState } from "../_components/admin-error-state.tsx";
@@ -35,6 +36,7 @@ export default function AdminShopsPage() {
     debouncedSearch || undefined,
     20,
   );
+  const plans = useActivePlans();
   const [editing, setEditing] = useState<AdminTenantRow | null>(null);
 
   return (
@@ -83,6 +85,7 @@ export default function AdminShopsPage() {
               <TableRow>
                 <TableHead>Shop</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Plan</TableHead>
                 <TableHead>Trial ends</TableHead>
                 <TableHead>Paid through</TableHead>
                 <TableHead>Signed up</TableHead>
@@ -92,11 +95,18 @@ export default function AdminShopsPage() {
             <TableBody>
               {results.map((t) => {
                 const { tone, label } = tenantAccessTone(t.accessState);
+                const planName =
+                  plans?.find((p) => p.code === t.planCode)?.name ??
+                  t.planCode ??
+                  "—";
                 return (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell>
                       <AdminStatusBadge tone={tone} label={label} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {planName}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(parseISO(t.trialEndsAt), "dd MMM yyyy")}

@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useAdminSetTenantSubscription } from "@/lib/queries/admin.ts";
+import { useActivePlans } from "@/lib/queries/billing.ts";
 import type { AdminTenantRow } from "@/lib/supabase/admin-types.ts";
 import {
   Dialog,
@@ -32,6 +33,7 @@ import {
 const schema = z.object({
   status: z.enum(["trialing", "active", "past_due", "canceled"]),
   periodEnd: z.string().optional(),
+  planCode: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -47,6 +49,7 @@ export default function OverrideSubscriptionDialog({
   onClose: () => void;
 }) {
   const setSubscription = useAdminSetTenantSubscription();
+  const plans = useActivePlans();
   const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({
@@ -54,6 +57,7 @@ export default function OverrideSubscriptionDialog({
     values: {
       status: tenant?.subscriptionStatus ?? "trialing",
       periodEnd: tenant?.currentPeriodEnd?.slice(0, 10) ?? "",
+      planCode: tenant?.planCode ?? "",
     },
   });
 
@@ -65,6 +69,7 @@ export default function OverrideSubscriptionDialog({
         tenantId: tenant.id,
         status: values.status,
         periodEnd: values.periodEnd ? `${values.periodEnd}T23:59:59Z` : null,
+        planCode: values.planCode || undefined,
       });
       toast.success(`Updated ${tenant.name}'s subscription`);
       onClose();
@@ -102,6 +107,30 @@ export default function OverrideSubscriptionDialog({
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="past_due">Past due</SelectItem>
                       <SelectItem value="canceled">Canceled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="planCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Plan (optional)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No change" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(plans ?? []).map((p) => (
+                        <SelectItem key={p.code} value={p.code}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
