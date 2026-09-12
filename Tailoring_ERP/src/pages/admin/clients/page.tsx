@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 import { useAdminClients } from "@/lib/queries/admin.ts";
+import { AdminErrorState } from "../_components/admin-error-state.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -39,7 +40,7 @@ export default function AdminClientsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const { results, status, loadMore } = useAdminClients(
+  const { results, status, loadMore, retry } = useAdminClients(
     debouncedSearch || undefined,
     20,
   );
@@ -67,6 +68,8 @@ export default function AdminClientsPage() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
+      ) : status === "Error" ? (
+        <AdminErrorState onRetry={retry} />
       ) : results.length === 0 ? (
         <Empty>
           <EmptyHeader>

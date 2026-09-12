@@ -18,7 +18,33 @@ create type inventory_category as enum ('fabric', 'thread', 'button', 'other');
 create type fitting_status as enum ('scheduled', 'completed', 'cancelled');
 
 -- ----------------------------------------------------------------------------
+-- PLANS
+-- One editable plan, seeded below. Readable by any authenticated user (the
+-- billing page has to show the price); no client write path.
+-- ----------------------------------------------------------------------------
+create table plans (
+  code          text primary key,
+  name          text not null,
+  amount        numeric(12,2) not null,
+  currency      text not null,
+  interval_days int not null default 30,
+  is_active     boolean not null default true
+);
+
+-- Placeholder price — change this before going live:
+--   update plans set amount = <real amount>, currency = '<real currency>' where code = 'standard';
+insert into plans (code, name, amount, currency, interval_days, is_active)
+values ('standard', 'AtelierHQ Standard', 5000, 'NGN', 30, true)
+on conflict (code) do nothing;
+
+-- ----------------------------------------------------------------------------
 -- TENANTS  (one row per tailoring business)
+--
+-- trial_ends_at / subscription_status / plan_code / current_period_end
+-- back a 30-day free trial: tenant_access_state() (below) computes whether
+-- writes are allowed from these plus now(), so nothing needs a cron job to
+-- "expire" anyone. billing_mandate_ref is reserved for a future Fincra
+-- direct-debit auto-renew path and unused by v1's manual-renewal flow.
 -- ----------------------------------------------------------------------------
 create table tenants (
   id          uuid primary key default gen_random_uuid(),
@@ -27,6 +53,12 @@ create table tenants (
   address     text,
   currency    text not null default 'USD',
   owner_id    uuid,                      -- set after the owner profile is created
+  trial_ends_at        timestamptz not null default (now() + interval '30 days'),
+  subscription_status  text not null default 'trialing'
+    check (subscription_status in ('trialing', 'active', 'past_due', 'canceled')),
+  plan_code            text references plans(code),
+  current_period_end   timestamptz,
+  billing_mandate_ref  text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -68,6 +100,40 @@ set search_path = public
 stable
 as $$
   select role from profiles where id = auth.uid();
+$$;
+
+-- ----------------------------------------------------------------------------
+-- helper: trial/subscription access gate. Computed live from now(), not
+-- cached — a shop needs no cron job to "expire" it. 'readonly' means the
+-- trial lapsed with no active subscription: reads stay open (see the RLS
+-- policies below), writes are refused.
+-- ----------------------------------------------------------------------------
+create or replace function tenant_access_state()
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select case
+    when t.subscription_status = 'active'
+      and t.current_period_end is not null
+      and t.current_period_end > now() then 'active'
+    when t.subscription_status = 'trialing' and t.trial_ends_at > now() then 'trialing'
+    else 'readonly'
+  end
+  from tenants t
+  where t.id = current_tenant_id();
+$$;
+
+create or replace function tenant_can_write()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select tenant_access_state() <> 'readonly';
 $$;
 
 -- ----------------------------------------------------------------------------
@@ -233,6 +299,28 @@ create table fincra_settings (
   is_live         boolean not null default false,
   updated_at      timestamptz not null default now()
 );
+
+-- ----------------------------------------------------------------------------
+-- SUBSCRIPTION INVOICES  (shop -> platform: one row per successful
+-- subscription payment, distinct from `payments` which is customer -> shop).
+-- Written only by apply_subscription_payment() below, called only from
+-- supabase/functions/subscription-billing's webhook via the service-role
+-- key — no client write path, matching admin_access_log's pattern.
+-- ----------------------------------------------------------------------------
+create table subscription_invoices (
+  id           uuid primary key default gen_random_uuid(),
+  tenant_id    uuid not null references tenants(id) on delete cascade,
+  plan_code    text references plans(code),
+  amount       numeric(12,2) not null,
+  currency     text not null,
+  reference    text not null unique,
+  status       text not null default 'paid',
+  period_start timestamptz not null,
+  period_end   timestamptz not null,
+  paid_at      timestamptz not null default now(),
+  created_at   timestamptz not null default now()
+);
+create index subscription_invoices_tenant_idx on subscription_invoices(tenant_id, created_at desc);
 
 -- ----------------------------------------------------------------------------
 -- INVENTORY ITEMS  (shop-wide raw material stock, distinct from
@@ -439,6 +527,10 @@ begin
     raise exception 'No shop found for current user';
   end if;
 
+  if not tenant_can_write() then
+    raise exception 'Subscription required';
+  end if;
+
   if not exists (select 1 from customers where id = p_customer_id and tenant_id = v_tenant_id) then
     raise exception 'Customer not found';
   end if;
@@ -478,6 +570,10 @@ declare
   v_status order_status;
   v_next order_status;
 begin
+  if not tenant_can_write() then
+    raise exception 'Subscription required';
+  end if;
+
   select status into v_status from orders where id = p_order_id and tenant_id = v_tenant_id;
   if v_status is null then
     raise exception 'Order not found';
@@ -517,6 +613,10 @@ declare
   v_already_paid numeric;
   v_payment_id uuid;
 begin
+  if not tenant_can_write() then
+    raise exception 'Subscription required';
+  end if;
+
   select * into v_order from orders where id = p_order_id and tenant_id = v_tenant_id;
   if v_order.id is null then
     raise exception 'Order not found';
@@ -558,6 +658,10 @@ declare
   v_tenant_id uuid := current_tenant_id();
   v_payout_id uuid;
 begin
+  if not tenant_can_write() then
+    raise exception 'Subscription required';
+  end if;
+
   if p_amount <= 0 then
     raise exception 'Amount must be greater than 0';
   end if;
@@ -595,6 +699,10 @@ as $$
 declare
   v_tenant_id uuid := current_tenant_id();
 begin
+  if not tenant_can_write() then
+    raise exception 'Subscription required';
+  end if;
+
   if current_user_role() <> 'owner' then
     raise exception 'Only the shop owner can connect Fincra';
   end if;
@@ -629,6 +737,114 @@ as $$
   from fincra_settings
   where tenant_id = current_tenant_id();
 $$;
+
+-- ----------------------------------------------------------------------------
+-- SUBSCRIPTION BILLING (shop -> platform, via the platform's own Fincra
+-- account — see supabase/functions/subscription-billing). Distinct from
+-- fincra_settings/set_fincra_settings above, which is each shop's own
+-- Fincra account for taking payments from ITS customers.
+-- ----------------------------------------------------------------------------
+
+-- Client-safe billing summary for the /billing page.
+create or replace function get_tenant_billing_state()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_tenant tenants%rowtype;
+  v_plan jsonb;
+  v_days_left int;
+begin
+  select * into v_tenant from tenants where id = current_tenant_id();
+  if v_tenant.id is null then
+    raise exception 'No shop found for current user';
+  end if;
+
+  select jsonb_build_object(
+    'code', p.code,
+    'name', p.name,
+    'amount', p.amount,
+    'currency', p.currency,
+    'intervalDays', p.interval_days
+  )
+  into v_plan
+  from plans p
+  where p.code = coalesce(
+    v_tenant.plan_code,
+    (select code from plans where is_active order by code limit 1)
+  );
+
+  v_days_left := greatest(
+    0,
+    ceil(extract(epoch from (v_tenant.trial_ends_at - now())) / 86400)
+  )::int;
+
+  return jsonb_build_object(
+    'state', tenant_access_state(),
+    'subscriptionStatus', v_tenant.subscription_status,
+    'trialEndsAt', v_tenant.trial_ends_at,
+    'currentPeriodEnd', v_tenant.current_period_end,
+    'daysLeft', v_days_left,
+    'plan', v_plan
+  );
+end;
+$$;
+
+-- Called only by supabase/functions/subscription-billing's webhook handler
+-- via the service-role key — revoked from PUBLIC below so no tenant can
+-- call this through the client SDK and grant itself a free active
+-- subscription. Idempotent on `reference`; extends from the later of "now"
+-- or the existing current_period_end so an early renewal adds on top of
+-- remaining time instead of discarding it.
+create or replace function apply_subscription_payment(
+  p_tenant_id uuid,
+  p_plan_code text,
+  p_amount numeric,
+  p_currency text,
+  p_reference text,
+  p_interval_days int
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_period_start timestamptz;
+  v_period_end timestamptz;
+begin
+  if exists (select 1 from subscription_invoices where reference = p_reference) then
+    return false;
+  end if;
+
+  select greatest(now(), coalesce(current_period_end, now()))
+  into v_period_start
+  from tenants where id = p_tenant_id;
+
+  if v_period_start is null then
+    raise exception 'Shop not found';
+  end if;
+
+  v_period_end := v_period_start + make_interval(days => p_interval_days);
+
+  insert into subscription_invoices (tenant_id, plan_code, amount, currency, reference, status, period_start, period_end, paid_at)
+  values (p_tenant_id, p_plan_code, p_amount, p_currency, p_reference, 'paid', v_period_start, v_period_end, now());
+
+  update tenants
+  set subscription_status = 'active',
+      plan_code = p_plan_code,
+      current_period_end = v_period_end
+  where id = p_tenant_id;
+
+  return true;
+end;
+$$;
+
+revoke execute on function apply_subscription_payment(uuid, text, numeric, text, text, int) from public;
+grant execute on function apply_subscription_payment(uuid, text, numeric, text, text, int) to service_role;
 
 -- ============================================================================
 -- ANALYTICS (read-only, RLS-scoped via current_tenant_id())
@@ -859,6 +1075,12 @@ begin
   from inventory_items
   where quantity_on_hand <= reorder_threshold;
 
+  perform log_admin_access(
+    'dashboard_stats',
+    null,
+    v_active_orders + v_fittings_today + v_fittings_week + v_low_inventory
+  );
+
   return jsonb_build_object(
     'revenueByCurrency', v_revenue,
     'activeOrders', v_active_orders,
@@ -964,6 +1186,7 @@ begin
     'status', o.status,
     'dueDate', o.due_date,
     'totalAmount', o.total_amount,
+    'currency', coalesce(t.currency, 'USD'),
     'customerName', coalesce(c.name, 'Unknown'),
     'garmentTypes', coalesce((
       select jsonb_agg(distinct oi.garment_type)
@@ -1121,6 +1344,7 @@ begin
           select description as d, row_number() over () as ord
           from tasks
           where tasks.worker_id = w.id and tasks.status != 'done'
+          order by created_at desc, id
           limit 3
         ) top3
       ) as active_descriptions
@@ -1160,6 +1384,7 @@ begin
   from (
     select * from orders
     where order_number ilike '%' || p_term || '%'
+    order by created_at desc, id
     limit 5
   ) o
   left join tenants t on t.id = o.tenant_id
@@ -1177,6 +1402,7 @@ begin
   from (
     select * from customers
     where name ilike '%' || p_term || '%'
+    order by created_at desc, id
     limit 5
   ) c
   left join tenants t on t.id = c.tenant_id;
@@ -1184,6 +1410,91 @@ begin
   v_result := v_orders || v_clients;
   perform log_admin_access('quick_search', p_term, jsonb_array_length(v_result));
   return v_result;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- SHOPS (subscription visibility + manual override)
+-- The manual-renewal billing model guarantees occasional human intervention
+-- (a shop pays by bank transfer, a payment needs comping) — this is that
+-- escape hatch, audited the same as every other admin action.
+-- ----------------------------------------------------------------------------
+create or replace function admin_list_tenants(p_search text, p_limit int, p_offset int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', t.id,
+    'name', t.name,
+    'currency', t.currency,
+    'createdAt', t.created_at,
+    'subscriptionStatus', t.subscription_status,
+    'accessState', case
+      when t.subscription_status = 'active'
+        and t.current_period_end is not null
+        and t.current_period_end > now() then 'active'
+      when t.subscription_status = 'trialing' and t.trial_ends_at > now() then 'trialing'
+      else 'readonly'
+    end,
+    'trialEndsAt', t.trial_ends_at,
+    'currentPeriodEnd', t.current_period_end,
+    'planCode', t.plan_code
+  ) order by t.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select * from tenants
+    where p_search is null or p_search = '' or name ilike '%' || p_search || '%'
+    order by created_at desc
+    offset p_offset limit p_limit
+  ) t;
+
+  perform log_admin_access('list_tenants', p_search, jsonb_array_length(v_result));
+  return v_result;
+end;
+$$;
+
+create or replace function admin_set_tenant_subscription(
+  p_tenant_id uuid,
+  p_status text,
+  p_period_end timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not is_platform_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  if p_status not in ('trialing', 'active', 'past_due', 'canceled') then
+    raise exception 'Invalid subscription status: %', p_status;
+  end if;
+
+  update tenants
+  set subscription_status = p_status,
+      current_period_end = p_period_end
+  where id = p_tenant_id;
+
+  if not found then
+    raise exception 'Shop not found';
+  end if;
+
+  perform log_admin_access(
+    'set_tenant_subscription',
+    p_tenant_id::text || ' -> ' || p_status,
+    1
+  );
 end;
 $$;
 
@@ -1215,6 +1526,8 @@ alter table platform_admins   enable row level security;
 alter table admin_access_log  enable row level security;
 -- no policies on platform_admins: only is_platform_admin() and
 -- get_platform_admin_dashboard_stats() (both security definer) read it
+alter table plans                 enable row level security;
+alter table subscription_invoices enable row level security;
 
 create policy tenants_select on tenants
   for select using (id = current_tenant_id());
@@ -1228,45 +1541,46 @@ create policy profiles_insert_self on profiles
 create policy profiles_update_self on profiles
   for update using (id = auth.uid());
 
-create policy customers_all on customers
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
+-- Every tenant-scoped business table below gets four policies instead of
+-- one blanket `for all`: SELECT is never gated (the 30-day-trial/subscription
+-- gate is a "read-only lock", not "hide their data" — see tenant_can_write()
+-- above), while INSERT/UPDATE/DELETE additionally require tenant_can_write().
+-- Written as a loop so the pattern can't drift table to table.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'customers', 'workers', 'orders', 'order_items', 'order_materials',
+    'tasks', 'payments', 'worker_payouts', 'inventory_items', 'fittings'
+  ]
+  loop
+    execute format(
+      'create policy %I on %I for select using (tenant_id = current_tenant_id())',
+      t || '_select', t
+    );
+    execute format(
+      'create policy %I on %I for insert with check (tenant_id = current_tenant_id() and tenant_can_write())',
+      t || '_insert', t
+    );
+    execute format(
+      'create policy %I on %I for update using (tenant_id = current_tenant_id() and tenant_can_write()) with check (tenant_id = current_tenant_id() and tenant_can_write())',
+      t || '_update', t
+    );
+    execute format(
+      'create policy %I on %I for delete using (tenant_id = current_tenant_id() and tenant_can_write())',
+      t || '_delete', t
+    );
+  end loop;
+end $$;
 
-create policy workers_all on workers
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
+create policy plans_select on plans
+  for select using (auth.uid() is not null);
 
-create policy orders_all on orders
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy order_items_all on order_items
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy order_materials_all on order_materials
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy tasks_all on tasks
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy payments_all on payments
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy worker_payouts_all on worker_payouts
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy inventory_items_all on inventory_items
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
-
-create policy fittings_all on fittings
-  for all using (tenant_id = current_tenant_id())
-  with check (tenant_id = current_tenant_id());
+create policy subscription_invoices_select on subscription_invoices
+  for select using (tenant_id = current_tenant_id());
+-- no insert/update/delete policy on subscription_invoices: only
+-- apply_subscription_payment() (service-role only, see above) ever writes here
 
 -- Platform-admin reads do NOT get a raw RLS select policy here — every one
 -- of them is a purpose-built, audited, security-definer RPC instead (see

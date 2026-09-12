@@ -17,6 +17,7 @@ import {
 import { useAdminSchedule } from "@/lib/queries/admin.ts";
 import { fittingTone } from "../_lib/admin-tone.ts";
 import { AdminStatusBadge } from "../_components/admin-status-badge.tsx";
+import { AdminErrorState } from "../_components/admin-error-state.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent } from "@/components/ui/card.tsx";
@@ -50,7 +51,10 @@ export default function AdminSchedulePage() {
 
   const rangeStart = format(gridStart, "yyyy-MM-dd");
   const rangeEnd = format(addDays(gridEnd, 1), "yyyy-MM-dd");
-  const data = useAdminSchedule(rangeStart, rangeEnd);
+  const { data, isLoading, isError, retry } = useAdminSchedule(
+    rangeStart,
+    rangeEnd,
+  );
 
   const fittingsByDay = useMemo(() => {
     const map = new Map<string, AdminFittingRow[]>();
@@ -105,8 +109,10 @@ export default function AdminSchedulePage() {
         </div>
       </PageHeader>
 
-      {data === undefined ? (
+      {isLoading ? (
         <Skeleton className="h-96 w-full" />
+      ) : isError ? (
+        <AdminErrorState onRetry={retry} />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
           <div className="rounded-lg border border-border overflow-hidden">

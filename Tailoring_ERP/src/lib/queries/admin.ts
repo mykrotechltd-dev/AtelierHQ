@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase/client.ts";
 import type {
   AdminClientRow,
@@ -9,6 +9,8 @@ import type {
   AdminOrderRow,
   AdminSearchResult,
   AdminStaffRow,
+  AdminTenantRow,
+  SubscriptionStatus,
 } from "../supabase/admin-types.ts";
 import { usePaginatedQuery } from "./pagination.ts";
 
@@ -21,7 +23,13 @@ import { usePaginatedQuery } from "./pagination.ts";
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 
-export function useAdminDashboardStats(): AdminDashboardStats | undefined {
+export function useAdminDashboardStats(): {
+  stats: AdminDashboardStats | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  retry: () => void;
+} {
   const query = useQuery({
     queryKey: ["admin", "dashboardStats"],
     queryFn: async () => {
@@ -32,7 +40,13 @@ export function useAdminDashboardStats(): AdminDashboardStats | undefined {
       return data as AdminDashboardStats;
     },
   });
-  return query.data;
+  return {
+    stats: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    retry: () => query.refetch(),
+  };
 }
 
 // ── Orders ───────────────────────────────────────────────────────────────
@@ -90,7 +104,13 @@ export function useAdminSchedule(rangeStart: string, rangeEnd: string) {
       return { fittings: result.fittings, deliveries: result.deliveries };
     },
   });
-  return query.data;
+  return {
+    data: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    retry: () => query.refetch(),
+  };
 }
 
 // ── Inventory ────────────────────────────────────────────────────────────
@@ -129,6 +149,41 @@ export function useAdminStaff(search: string | undefined, pageSize = 20) {
   );
 }
 
+// ── Shops (subscription visibility + manual override) ──────────────────
+
+export function useAdminTenants(search: string | undefined, pageSize = 20) {
+  return usePaginatedQuery<AdminTenantRow>(
+    ["admin", "tenants", search ?? ""],
+    async (offset, limit) => {
+      const { data, error } = await supabase.rpc("admin_list_tenants", {
+        p_search: search ?? null,
+        p_limit: limit,
+        p_offset: offset,
+      });
+      if (error) throw error;
+      return (data as AdminTenantRow[]) ?? [];
+    },
+    pageSize,
+  );
+}
+
+export function useAdminSetTenantSubscription() {
+  const qc = useQueryClient();
+  return async (input: {
+    tenantId: string;
+    status: SubscriptionStatus;
+    periodEnd: string | null;
+  }) => {
+    const { error } = await supabase.rpc("admin_set_tenant_subscription", {
+      p_tenant_id: input.tenantId,
+      p_status: input.status,
+      p_period_end: input.periodEnd,
+    });
+    if (error) throw error;
+    await qc.invalidateQueries({ queryKey: ["admin", "tenants"] });
+  };
+}
+
 // ── Header quick search (orders + clients) ─────────────────────────────
 
 export function useAdminQuickSearch(term: string) {
@@ -144,5 +199,5 @@ export function useAdminQuickSearch(term: string) {
     },
     enabled: trimmed.length > 0,
   });
-  return query.data ?? [];
+  return { results: query.data ?? [], isError: query.isError };
 }

@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Boxes,
   UserCheck,
+  Store,
 } from "lucide-react";
 
 const MOBILE_NAV = [
@@ -16,6 +17,7 @@ const MOBILE_NAV = [
   { label: "Schedule", icon: CalendarDays, path: "/admin/schedule" },
   { label: "Inventory", icon: Boxes, path: "/admin/inventory" },
   { label: "Staff", icon: UserCheck, path: "/admin/staff" },
+  { label: "Shops", icon: Store, path: "/admin/shops" },
 ];
 
 export default function AdminMobileNav({

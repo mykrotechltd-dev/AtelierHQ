@@ -35,6 +35,11 @@ export interface Database {
           address: string | null;
           currency: string;
           owner_id: string | null;
+          trial_ends_at: string;
+          subscription_status: "trialing" | "active" | "past_due" | "canceled";
+          plan_code: string | null;
+          current_period_end: string | null;
+          billing_mandate_ref: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -239,6 +244,38 @@ export interface FincraSettingsPublic {
   publicKey: string;
   isLive: boolean;
   connected: boolean;
+}
+
+export type TenantAccessState = "trialing" | "active" | "readonly";
+export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled";
+
+export interface BillingPlan {
+  code: string;
+  name: string;
+  amount: number;
+  currency: string;
+  intervalDays: number;
+}
+
+/** From get_tenant_billing_state() — the /billing page's whole model. */
+export interface BillingState {
+  state: TenantAccessState;
+  subscriptionStatus: SubscriptionStatus;
+  trialEndsAt: string;
+  currentPeriodEnd: string | null;
+  daysLeft: number;
+  plan: BillingPlan | null;
+}
+
+export interface SubscriptionInvoice {
+  id: string;
+  planCode: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+  paidAt: string;
 }
 
 export interface Customer {

@@ -3,6 +3,7 @@ import { useDebounce } from "@/hooks/use-debounce.ts";
 import { useAdminStaff } from "@/lib/queries/admin.ts";
 import { taskTone } from "../_lib/admin-tone.ts";
 import { AdminStatusBadge } from "../_components/admin-status-badge.tsx";
+import { AdminErrorState } from "../_components/admin-error-state.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -20,7 +21,7 @@ import { UserCheck, Search } from "lucide-react";
 export default function AdminStaffPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
-  const { results, status, loadMore } = useAdminStaff(
+  const { results, status, loadMore, retry } = useAdminStaff(
     debouncedSearch || undefined,
     20,
   );
@@ -48,6 +49,8 @@ export default function AdminStaffPage() {
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
+      ) : status === "Error" ? (
+        <AdminErrorState onRetry={retry} />
       ) : results.length === 0 ? (
         <Empty>
           <EmptyHeader>

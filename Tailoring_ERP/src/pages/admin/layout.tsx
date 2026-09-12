@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
-import {
-  AdminAuthProvider,
-  useAdminSession,
-} from "@/components/providers/admin-auth.tsx";
+import { useAdminSession } from "@/components/providers/admin-auth.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import AdminSidebar from "./_components/admin-sidebar.tsx";
@@ -81,10 +78,7 @@ function AdminShell() {
   );
 }
 
-export default function AdminLayout() {
-  return (
-    <AdminAuthProvider>
-      <AdminShell />
-    </AdminAuthProvider>
-  );
-}
+// AdminAuthProvider wraps this AND /admin/login in App.tsx — a shared
+// instance so login.tsx can navigate off the same resolved status this
+// shell reads, instead of running its own separate admin check.
+export default AdminShell;

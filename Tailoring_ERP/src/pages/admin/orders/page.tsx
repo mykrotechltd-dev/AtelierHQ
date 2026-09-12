@@ -4,6 +4,7 @@ import { useDebounce } from "@/hooks/use-debounce.ts";
 import { useAdminOrders } from "@/lib/queries/admin.ts";
 import { orderTone } from "../_lib/admin-tone.ts";
 import { AdminStatusBadge } from "../_components/admin-status-badge.tsx";
+import { AdminErrorState } from "../_components/admin-error-state.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -24,11 +25,16 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty.tsx";
 import { ClipboardList, Search } from "lucide-react";
+import { formatCurrency } from "@/lib/format-currency.ts";
+
+function fmt(n: number, currency: string) {
+  return formatCurrency(n, currency, 2);
+}
 
 export default function AdminOrdersPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
-  const { results, status, loadMore } = useAdminOrders(
+  const { results, status, loadMore, retry } = useAdminOrders(
     debouncedSearch || undefined,
     20,
   );
@@ -56,6 +62,8 @@ export default function AdminOrdersPage() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
+      ) : status === "Error" ? (
+        <AdminErrorState onRetry={retry} />
       ) : results.length === 0 ? (
         <Empty>
           <EmptyHeader>
@@ -110,9 +118,7 @@ export default function AdminOrdersPage() {
                       <AdminStatusBadge tone={tone} label={label} />
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {order.totalAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                      })}
+                      {fmt(order.totalAmount, order.currency)}
                     </TableCell>
                   </TableRow>
                 );

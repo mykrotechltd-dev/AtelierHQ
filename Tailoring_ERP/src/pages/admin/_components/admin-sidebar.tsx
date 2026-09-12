@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Boxes,
   UserCheck,
+  Store,
   LogOut,
   ShieldCheck,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { label: "Schedule", icon: CalendarDays, path: "/admin/schedule" },
   { label: "Inventory", icon: Boxes, path: "/admin/inventory" },
   { label: "Staff", icon: UserCheck, path: "/admin/staff" },
+  { label: "Shops", icon: Store, path: "/admin/shops" },
 ];
 
 export default function AdminSidebar({

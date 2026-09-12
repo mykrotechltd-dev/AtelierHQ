@@ -13,6 +13,7 @@ import {
   ScissorsLineDashed,
   LogOut,
   Scissors,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -80,6 +81,20 @@ export default function AppSidebar({
 
       {/* Bottom */}
       <div className="px-2 py-3 border-t border-sidebar-border space-y-0.5">
+        <NavLink
+          to="/billing"
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-body transition-colors",
+              isActive
+                ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
+            )
+          }
+        >
+          <Wallet className="size-4 shrink-0" />
+          Billing
+        </NavLink>
         <NavLink
           to="/settings"
           className={({ isActive }) =>

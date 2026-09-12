@@ -3,6 +3,7 @@ import type { OrderStatus } from "@/lib/supabase/types.ts";
 import type {
   AdminTone,
   FittingStatus,
+  TenantAccessState,
 } from "@/lib/supabase/admin-types.ts";
 
 /** red = urgent, yellow = in progress, green = complete. An order is
@@ -43,6 +44,14 @@ export function taskTone(
     return { tone: "progress", label: "In Progress" };
   }
   return { tone: "urgent", label: "Pending" };
+}
+
+export function tenantAccessTone(
+  state: TenantAccessState,
+): { tone: AdminTone; label: string } {
+  if (state === "active") return { tone: "complete", label: "Active" };
+  if (state === "trialing") return { tone: "progress", label: "Trial" };
+  return { tone: "urgent", label: "Read-only" };
 }
 
 export function inventoryTone(

@@ -5,6 +5,7 @@ import {
   useTopCustomers,
   useWorkerPerformance,
 } from "@/lib/queries/analytics.ts";
+import { formatCurrency as fmt } from "@/lib/format-currency.ts";
 import PageHeader from "@/components/page-header.tsx";
 import {
   Card,
@@ -27,13 +28,6 @@ import {
   Legend,
 } from "recharts";
 
-function fmt(n: number, currency: string) {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: currency || "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
 
 const STATUS_COLORS: Record<string, string> = {
   received: "#3b82f6",
