@@ -64,6 +64,10 @@ import {
 import { downloadPatternsPDF } from "@/lib/pattern-pdf.ts";
 import PatternBlockSVG from "./_components/pattern-block-svg.tsx";
 import CurveEditor from "./_components/curve-editor.tsx";
+import { SvgSourceView, PdfPreview } from "./_components/pattern-output.tsx";
+import { buildBlockSvg } from "@/lib/pattern-svg.ts";
+
+type OutputFormat = "pattern" | "svg" | "pdf";
 import {
   Scissors,
   Download,
@@ -658,6 +662,7 @@ function DraftWorkspace({
   const [bodiceShoulderDart, setBodiceShoulderDart] = useState(true);
   const [bodiceSwayback, setBodiceSwayback] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("pattern");
 
   // Curve editing state
   // blockId → { pathIndex → overridden d string }
@@ -789,29 +794,7 @@ function DraftWorkspace({
     const block = blocks.find((b) => b.id === blockId);
     if (!block || block.missingMeasurements.length > 0) return;
 
-    const { x, y, w, h } = block.viewBox;
-    // Build SVG string
-    const PATH_STROKES: Record<string, string> = {
-      outline: `stroke="#1c2850" stroke-width="2" fill="#f8f6f0"`,
-      dart: `stroke="#1c2850" stroke-width="1" stroke-dasharray="6 3" fill="none"`,
-      grainline: `stroke="#b48c3c" stroke-width="1.5" fill="none"`,
-      construction: `stroke="#6b7280" stroke-width="0.75" stroke-dasharray="4 3" fill="none"`,
-      fold: `stroke="#b48c3c" stroke-width="1.5" stroke-dasharray="8 3" fill="none"`,
-    };
-    const pathsStr = block.paths
-      .map(
-        (p) =>
-          `<path d="${p.d}" ${PATH_STROKES[p.type]} stroke-linejoin="round" stroke-linecap="round"/>`,
-      )
-      .join("\n");
-    const labelsStr = block.labels
-      .map(
-        (l) =>
-          `<text x="${l.x}" y="${l.y}" text-anchor="${l.anchor ?? "start"}" font-size="${l.fontSize ?? 5}" fill="#1c2850" font-family="sans-serif"${l.rotate ? ` transform="rotate(${-l.rotate}, ${l.x}, ${l.y})"` : ""}>${l.text}</text>`,
-      )
-      .join("\n");
-    const svgStr = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" width="${w * 10}mm" height="${h * 10}mm">\n<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f8f6f0"/>\n${pathsStr}\n${labelsStr}\n</svg>`;
-    const blob = new Blob([svgStr], { type: "image/svg+xml" });
+    const blob = new Blob([buildBlockSvg(block)], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1218,169 +1201,219 @@ function DraftWorkspace({
                 </>
               )}
             </div>
-            <Badge variant="outline" className="text-xs capitalize">
-              {ease} fit
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs capitalize">
+                {ease} fit
+              </Badge>
+              <div
+                role="group"
+                aria-label="Output format"
+                className="inline-flex rounded-xl border bg-card p-0.5"
+              >
+                {(
+                  [
+                    ["pattern", "Pattern"],
+                    ["svg", "SVG"],
+                    ["pdf", "PDF"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={outputFormat === value}
+                    onClick={() => setOutputFormat(value)}
+                    className={`min-h-9 cursor-pointer rounded-[10px] px-3.5 text-[13px] font-semibold transition-colors ${
+                      outputFormat === value
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* Block preview tabs */}
-          <Tabs defaultValue={entry.blocks[0]}>
-            <TabsList className="flex-wrap h-auto gap-1">
-              {entry.blocks.map((bt) => {
-                const block = blocks.find((b) => b.id === bt);
-                const missing = (block?.missingMeasurements.length ?? 0) > 0;
-                return (
-                  <TabsTrigger
-                    key={bt}
-                    value={bt}
-                    className="text-xs relative cursor-pointer"
-                  >
-                    {BLOCK_LABELS[bt]}
-                    {missing && (
-                      <span className="ml-1 text-destructive text-xs">!</span>
-                    )}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
+          {outputFormat === "svg" && (
+            <SvgSourceView
+              blocks={readyBlocks}
+              onDownload={(id) => handleDownloadSVG(id)}
+            />
+          )}
+          {outputFormat === "pdf" && (
+            <PdfPreview
+              blocks={readyBlocks}
+              customerName={
+                selectedCustomer?.name ?? (ukSize ? `UK ${ukSize}` : "Bespoke")
+              }
+            />
+          )}
 
-            {blocks.map((block) => (
-              <TabsContent key={block.id} value={block.id} className="mt-3">
-                <Card>
-                  <CardContent className="pt-5">
-                    {block.missingMeasurements.length > 0 ? (
-                      <div className="flex flex-col items-center justify-center h-64 gap-3">
-                        <AlertTriangle className="size-6 text-amber-500" />
-                        <div className="text-center">
-                          <p className="text-sm font-medium">
-                            Missing measurements
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {block.missingMeasurements.join(", ")}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Edit curves toolbar */}
-                        <div className="flex items-center justify-between mb-4">
-                          <p className="text-xs text-muted-foreground">
-                            {curveOverrides[block.id]
-                              ? "Curves have been manually edited"
-                              : "Engine-generated curves"}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            {curveOverrides[block.id] && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
-                                onClick={() => handleResetCurves(block.id)}
-                              >
-                                <RotateCcw className="size-3 mr-1" />
-                                Reset curves
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="h-7 px-3 text-xs cursor-pointer"
-                              onClick={() => setEditingBlockId(block.id)}
-                            >
-                              <Spline className="size-3 mr-1.5" />
-                              Edit curves
-                            </Button>
+          {/* Block preview tabs */}
+          {outputFormat === "pattern" && (
+            <Tabs defaultValue={entry.blocks[0]}>
+              <TabsList className="flex-wrap h-auto gap-1">
+                {entry.blocks.map((bt) => {
+                  const block = blocks.find((b) => b.id === bt);
+                  const missing = (block?.missingMeasurements.length ?? 0) > 0;
+                  return (
+                    <TabsTrigger
+                      key={bt}
+                      value={bt}
+                      className="text-xs relative cursor-pointer"
+                    >
+                      {BLOCK_LABELS[bt]}
+                      {missing && (
+                        <span className="ml-1 text-destructive text-xs">!</span>
+                      )}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+
+              {blocks.map((block) => (
+                <TabsContent key={block.id} value={block.id} className="mt-3">
+                  <Card>
+                    <CardContent className="pt-5">
+                      {block.missingMeasurements.length > 0 ? (
+                        <div className="flex flex-col items-center justify-center h-64 gap-3">
+                          <AlertTriangle className="size-6 text-amber-500" />
+                          <div className="text-center">
+                            <p className="text-sm font-medium">
+                              Missing measurements
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {block.missingMeasurements.join(", ")}
+                            </p>
                           </div>
                         </div>
-
-                        {/* Side-by-side preview */}
-                        <div className="flex flex-wrap gap-6 justify-center">
-                          {entry.blocks.length > 1 ? (
-                            entry.blocks.map((bt) => {
-                              const b = blocks.find((x) => x.id === bt)!;
-                              return b.missingMeasurements.length === 0 ? (
-                                <BlockPreview key={bt} block={b} />
-                              ) : null;
-                            })
-                          ) : (
-                            <BlockPreview block={block} large />
-                          )}
-                        </div>
-
-                        {/* Legend */}
-                        <div className="flex flex-wrap gap-4 mt-5 px-1">
-                          {[
-                            {
-                              color: "#1c2850",
-                              dash: false,
-                              label: "Seam line",
-                            },
-                            { color: "#1c2850", dash: true, label: "Dart" },
-                            {
-                              color: "#b48c3c",
-                              dash: false,
-                              label: "Grain line",
-                            },
-                            {
-                              color: "#6b7280",
-                              dash: true,
-                              label: "Construction",
-                            },
-                          ].map(({ color, dash, label }) => (
-                            <div
-                              key={label}
-                              className="flex items-center gap-1.5"
-                            >
-                              <svg width="20" height="8" viewBox="0 0 20 8">
-                                <line
-                                  x1="0"
-                                  y1="4"
-                                  x2="20"
-                                  y2="4"
-                                  stroke={color}
-                                  strokeWidth="1.5"
-                                  strokeDasharray={dash ? "4 2" : "0"}
-                                />
-                              </svg>
-                              <span className="text-[11px] text-muted-foreground">
-                                {label}
-                              </span>
+                      ) : (
+                        <>
+                          {/* Edit curves toolbar */}
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-xs text-muted-foreground">
+                              {curveOverrides[block.id]
+                                ? "Curves have been manually edited"
+                                : "Engine-generated curves"}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {curveOverrides[block.id] && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
+                                  onClick={() => handleResetCurves(block.id)}
+                                >
+                                  <RotateCcw className="size-3 mr-1" />
+                                  Reset curves
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-7 px-3 text-xs cursor-pointer"
+                                onClick={() => setEditingBlockId(block.id)}
+                              >
+                                <Spline className="size-3 mr-1.5" />
+                                Edit curves
+                              </Button>
                             </div>
-                          ))}
-                        </div>
+                          </div>
 
-                        {/* Notes */}
-                        {block.notes.length > 0 && (
-                          <Accordion type="single" collapsible className="mt-4">
-                            <AccordionItem value="notes">
-                              <AccordionTrigger className="text-xs text-muted-foreground">
-                                Block notes ({block.notes.length})
-                              </AccordionTrigger>
-                              <AccordionContent>
-                                <ul className="space-y-1">
-                                  {block.notes.map((note, i) => (
-                                    <li
-                                      key={i}
-                                      className="text-xs text-muted-foreground flex items-start gap-2"
-                                    >
-                                      <span className="text-amber-500 shrink-0 mt-0.5">
-                                        •
-                                      </span>
-                                      {note}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </AccordionContent>
-                            </AccordionItem>
-                          </Accordion>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            ))}
-          </Tabs>
+                          {/* Side-by-side preview */}
+                          <div className="flex flex-wrap gap-6 justify-center">
+                            {entry.blocks.length > 1 ? (
+                              entry.blocks.map((bt) => {
+                                const b = blocks.find((x) => x.id === bt)!;
+                                return b.missingMeasurements.length === 0 ? (
+                                  <BlockPreview key={bt} block={b} />
+                                ) : null;
+                              })
+                            ) : (
+                              <BlockPreview block={block} large />
+                            )}
+                          </div>
+
+                          {/* Legend */}
+                          <div className="flex flex-wrap gap-4 mt-5 px-1">
+                            {[
+                              {
+                                color: "#1c2850",
+                                dash: false,
+                                label: "Seam line",
+                              },
+                              { color: "#1c2850", dash: true, label: "Dart" },
+                              {
+                                color: "#b48c3c",
+                                dash: false,
+                                label: "Grain line",
+                              },
+                              {
+                                color: "#6b7280",
+                                dash: true,
+                                label: "Construction",
+                              },
+                            ].map(({ color, dash, label }) => (
+                              <div
+                                key={label}
+                                className="flex items-center gap-1.5"
+                              >
+                                <svg width="20" height="8" viewBox="0 0 20 8">
+                                  <line
+                                    x1="0"
+                                    y1="4"
+                                    x2="20"
+                                    y2="4"
+                                    stroke={color}
+                                    strokeWidth="1.5"
+                                    strokeDasharray={dash ? "4 2" : "0"}
+                                  />
+                                </svg>
+                                <span className="text-[11px] text-muted-foreground">
+                                  {label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Notes */}
+                          {block.notes.length > 0 && (
+                            <Accordion
+                              type="single"
+                              collapsible
+                              className="mt-4"
+                            >
+                              <AccordionItem value="notes">
+                                <AccordionTrigger className="text-xs text-muted-foreground">
+                                  Block notes ({block.notes.length})
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="space-y-1">
+                                    {block.notes.map((note, i) => (
+                                      <li
+                                        key={i}
+                                        className="text-xs text-muted-foreground flex items-start gap-2"
+                                      >
+                                        <span className="text-amber-500 shrink-0 mt-0.5">
+                                          •
+                                        </span>
+                                        {note}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
 
           {/* Quick measurement summary */}
           {readyBlocks.length > 0 && (
