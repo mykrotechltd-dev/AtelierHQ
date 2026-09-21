@@ -9,7 +9,10 @@ import type {
 /** red = urgent, yellow = in progress, green = complete. An order is
  *  urgent once it's overdue and not yet delivered — a plain "in progress"
  *  order doesn't turn red just for existing. */
-export function orderTone(status: OrderStatus, dueDate: string | null): {
+export function orderTone(
+  status: OrderStatus,
+  dueDate: string | null,
+): {
   tone: AdminTone;
   label: string;
 } {
@@ -36,9 +39,10 @@ export function fittingTone(
   return { tone: "progress", label: "Scheduled" };
 }
 
-export function taskTone(
-  status: "pending" | "in_progress" | "done",
-): { tone: AdminTone; label: string } {
+export function taskTone(status: "pending" | "in_progress" | "done"): {
+  tone: AdminTone;
+  label: string;
+} {
   if (status === "done") return { tone: "complete", label: "Done" };
   if (status === "in_progress") {
     return { tone: "progress", label: "In Progress" };
@@ -46,9 +50,10 @@ export function taskTone(
   return { tone: "urgent", label: "Pending" };
 }
 
-export function tenantAccessTone(
-  state: TenantAccessState,
-): { tone: AdminTone; label: string } {
+export function tenantAccessTone(state: TenantAccessState): {
+  tone: AdminTone;
+  label: string;
+} {
   if (state === "active") return { tone: "complete", label: "Active" };
   if (state === "trialing") return { tone: "progress", label: "Trial" };
   return { tone: "urgent", label: "Read-only" };

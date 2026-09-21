@@ -1,4 +1,10 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+} from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
 import Login from "./pages/auth/Login.tsx";
@@ -33,6 +39,9 @@ import AdminInventoryPage from "./pages/admin/inventory/page.tsx";
 import AdminStaffPage from "./pages/admin/staff/page.tsx";
 import AdminShopsPage from "./pages/admin/shops/page.tsx";
 import AdminNotFound from "./pages/admin/not-found.tsx";
+import AdminActivityPage from "./pages/admin/activity/page.tsx";
+import AdminAuditPage from "./pages/admin/audit/page.tsx";
+import AdminRevenuePage from "./pages/admin/revenue/page.tsx";
 
 export default function App() {
   return (
@@ -66,7 +75,13 @@ export default function App() {
               fully separate from tenant auth above. Shared across both the
               login route and the authenticated shell so there is exactly
               one is_platform_admin() check per session, not one per page. */}
-          <Route element={<AdminAuthProvider><Outlet /></AdminAuthProvider>}>
+          <Route
+            element={
+              <AdminAuthProvider>
+                <Outlet />
+              </AdminAuthProvider>
+            }
+          >
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
@@ -77,6 +92,9 @@ export default function App() {
               <Route path="inventory" element={<AdminInventoryPage />} />
               <Route path="staff" element={<AdminStaffPage />} />
               <Route path="shops" element={<AdminShopsPage />} />
+              <Route path="activity" element={<AdminActivityPage />} />
+              <Route path="audit" element={<AdminAuditPage />} />
+              <Route path="revenue" element={<AdminRevenuePage />} />
               <Route path="*" element={<AdminNotFound />} />
             </Route>
           </Route>

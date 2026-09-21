@@ -8,6 +8,9 @@ import {
   Boxes,
   UserCheck,
   Store,
+  Activity,
+  ScrollText,
+  TrendingUp,
 } from "lucide-react";
 
 const MOBILE_NAV = [
@@ -18,6 +21,9 @@ const MOBILE_NAV = [
   { label: "Inventory", icon: Boxes, path: "/admin/inventory" },
   { label: "Staff", icon: UserCheck, path: "/admin/staff" },
   { label: "Shops", icon: Store, path: "/admin/shops" },
+  { label: "Activity", icon: Activity, path: "/admin/activity" },
+  { label: "Audit", icon: ScrollText, path: "/admin/audit" },
+  { label: "Revenue", icon: TrendingUp, path: "/admin/revenue" },
 ];
 
 export default function AdminMobileNav({

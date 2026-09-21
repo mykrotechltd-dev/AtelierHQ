@@ -108,9 +108,7 @@ export default function AdminClientsPage() {
                   <Fragment key={client.id}>
                     <TableRow
                       className="cursor-pointer"
-                      onClick={() =>
-                        setExpandedId(isOpen ? null : client.id)
-                      }
+                      onClick={() => setExpandedId(isOpen ? null : client.id)}
                     >
                       <TableCell>
                         {isOpen ? (

@@ -23,12 +23,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
-import {
-  ChevronLeft,
-  ChevronRight,
-  CalendarClock,
-  Truck,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarClock, Truck } from "lucide-react";
 import type {
   AdminDeliveryRow,
   AdminFittingRow,
@@ -37,7 +32,9 @@ import type {
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function AdminSchedulePage() {
-  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
+  const [monthCursor, setMonthCursor] = useState(() =>
+    startOfMonth(new Date()),
+  );
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
   const monthStart = startOfMonth(monthCursor);
