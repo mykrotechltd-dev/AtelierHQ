@@ -14,6 +14,8 @@ import {
   CardTitle,
 } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Lightbulb } from "lucide-react";
+import { insights } from "./insights.ts";
 import {
   BarChart,
   Bar,
@@ -28,12 +30,11 @@ import {
   Legend,
 } from "recharts";
 
-
 const STATUS_COLORS: Record<string, string> = {
-  received: "#3b82f6",
-  in_progress: "#f59e0b",
-  completed: "#10b981",
-  delivered: "#6b7280",
+  received: "var(--muted-foreground)",
+  in_progress: "var(--primary)",
+  completed: "var(--success)",
+  delivered: "var(--border)",
 };
 
 export default function ReportsPage() {
@@ -76,8 +77,9 @@ export default function ReportsPage() {
     : [];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
       <PageHeader
+        eyebrow="Atelier intelligence"
         title="Reports"
         description="Business analytics and performance overview."
       />
@@ -90,6 +92,24 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
+          {/* What stands out: plain-language findings from the numbers below */}
+          <Card className="shadow-lg shadow-foreground/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Lightbulb className="size-4 text-primary" /> What stands out
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-3 text-sm leading-relaxed">
+                {insights(stats, topCustomers, workerPerf, currency).map(
+                  (line) => (
+                    <li key={line}>{line}</li>
+                  ),
+                )}
+              </ul>
+            </CardContent>
+          </Card>
+
           {/* Summary row */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <SummaryCard
@@ -131,7 +151,7 @@ export default function ReportsPage() {
                       dataKey="label"
                       tick={{
                         fontSize: 11,
-                        fill: "hsl(var(--muted-foreground))",
+                        fill: "var(--muted-foreground)",
                       }}
                       axisLine={false}
                       tickLine={false}
@@ -139,7 +159,7 @@ export default function ReportsPage() {
                     <YAxis
                       tick={{
                         fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
+                        fill: "var(--muted-foreground)",
                       }}
                       axisLine={false}
                       tickLine={false}
@@ -150,10 +170,10 @@ export default function ReportsPage() {
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
+                        background: "var(--popover)",
+                        border: "1px solid var(--border)",
                         borderRadius: 8,
-                        color: "hsl(var(--popover-foreground))",
+                        color: "var(--popover-foreground)",
                         fontSize: 12,
                       }}
                       formatter={(value, name) => [
@@ -163,13 +183,14 @@ export default function ReportsPage() {
                     />
                     <Bar
                       dataKey="billed"
-                      fill="rgba(28,40,80,0.22)"
+                      fill="var(--muted-foreground)"
+                      fillOpacity={0.35}
                       radius={[4, 4, 0, 0]}
                       name="billed"
                     />
                     <Bar
                       dataKey="collected"
-                      fill="#1c2850"
+                      fill="var(--primary)"
                       radius={[4, 4, 0, 0]}
                       name="collected"
                     />
@@ -224,7 +245,7 @@ export default function ReportsPage() {
                           <span
                             style={{
                               fontSize: 12,
-                              color: "hsl(var(--muted-foreground))",
+                              color: "var(--muted-foreground)",
                             }}
                           >
                             {value}
@@ -233,8 +254,8 @@ export default function ReportsPage() {
                       />
                       <Tooltip
                         contentStyle={{
-                          background: "hsl(var(--popover))",
-                          border: "1px solid hsl(var(--border))",
+                          background: "var(--popover)",
+                          border: "1px solid var(--border)",
                           borderRadius: 8,
                           fontSize: 12,
                         }}
@@ -275,7 +296,7 @@ export default function ReportsPage() {
                       type="number"
                       tick={{
                         fontSize: 11,
-                        fill: "hsl(var(--muted-foreground))",
+                        fill: "var(--muted-foreground)",
                       }}
                       axisLine={false}
                       tickLine={false}
@@ -287,14 +308,14 @@ export default function ReportsPage() {
                       dataKey="name"
                       type="category"
                       width={110}
-                      tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+                      tick={{ fontSize: 12, fill: "var(--foreground)" }}
                       axisLine={false}
                       tickLine={false}
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
+                        background: "var(--popover)",
+                        border: "1px solid var(--border)",
                         borderRadius: 8,
                         fontSize: 12,
                       }}
@@ -303,7 +324,11 @@ export default function ReportsPage() {
                         "Total value",
                       ]}
                     />
-                    <Bar dataKey="total" fill="#1c2850" radius={[0, 4, 4, 0]} />
+                    <Bar
+                      dataKey="total"
+                      fill="var(--primary)"
+                      radius={[0, 4, 4, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -351,10 +376,10 @@ export default function ReportsPage() {
                             <td className="py-2 pr-4 text-muted-foreground">
                               {w.specialization ?? "—"}
                             </td>
-                            <td className="py-2 pr-4 text-right text-emerald-600 font-medium">
+                            <td className="py-2 pr-4 text-right text-success font-medium">
                               {w.done}
                             </td>
-                            <td className="py-2 pr-4 text-right text-amber-500">
+                            <td className="py-2 pr-4 text-right text-warning">
                               {w.inProgress}
                             </td>
                             <td className="py-2 pr-4 text-right text-muted-foreground">
@@ -387,13 +412,17 @@ function SummaryCard({
   highlight?: boolean;
 }) {
   return (
-    <Card className={highlight ? "border-yellow-500/40" : ""}>
+    <Card
+      className={
+        highlight ? "border-warning/40 shadow-lg shadow-foreground/5" : ""
+      }
+    >
       <CardContent className="pt-5 pb-4">
         <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
           {label}
         </p>
         <p
-          className={`text-2xl font-bold font-display mt-1 ${highlight ? "text-yellow-600" : ""}`}
+          className={`text-2xl font-bold font-display mt-1 ${highlight ? "text-warning" : ""}`}
         >
           {value}
         </p>

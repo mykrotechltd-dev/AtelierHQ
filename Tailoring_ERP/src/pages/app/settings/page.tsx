@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import PageHeader from "@/components/page-header.tsx";
+import { UnitToggle } from "@/components/ui/unit-toggle.tsx";
 import {
   Card,
   CardContent,
@@ -95,8 +96,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <PageHeader title="Settings" description="Manage your shop details." />
+    <div className="mx-auto max-w-2xl p-4 md:p-8">
+      <PageHeader
+        eyebrow="Workspace"
+        title="Settings"
+        description="Manage your shop details."
+      />
 
       {tenant === undefined ? (
         <Skeleton className="h-64 w-full" />
@@ -188,6 +193,25 @@ export default function SettingsPage() {
         </Card>
       )}
 
+      {tenant !== undefined && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="font-sans text-lg">Preferences</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold">Measurement unit</p>
+                <p className="text-[13px] text-muted-foreground">
+                  Default display for measurements
+                </p>
+              </div>
+              <UnitToggle />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {tenant !== undefined && <FincraCard />}
     </div>
   );
@@ -242,7 +266,7 @@ function FincraCard() {
           <Skeleton className="h-24 w-full" />
         ) : fincraSettings?.connected && !editing ? (
           <>
-            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-center gap-2 text-success">
               <CheckCircle2 className="size-4" />
               <span className="text-sm font-body font-medium">
                 Connected and accepting card payments

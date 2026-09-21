@@ -56,10 +56,9 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const METHOD_COLORS: Record<string, string> = {
-  cash: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  bank_transfer:
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  card: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  cash: "bg-success-soft text-success",
+  bank_transfer: "bg-accent text-accent-foreground",
+  card: "bg-warning-soft text-warning",
   other: "bg-muted text-muted-foreground",
 };
 
@@ -85,6 +84,7 @@ export default function PaymentsPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <PageHeader
+        eyebrow="Cash flow"
         title="Payments"
         description="Customer payments and outstanding balances."
       >
@@ -108,19 +108,19 @@ export default function PaymentsPage() {
             value={summary.totalBilled}
           />
           <SummaryCard
-            icon={<Banknote className="size-4 text-emerald-500" />}
+            icon={<Banknote className="size-4 text-success" />}
             label="Collected"
             value={summary.totalCollected}
             accent="emerald"
           />
           <SummaryCard
-            icon={<TrendingDown className="size-4 text-amber-500" />}
+            icon={<TrendingDown className="size-4 text-warning" />}
             label="Outstanding"
             value={summary.totalOutstanding}
             accent="amber"
           />
           <SummaryCard
-            icon={<AlertCircle className="size-4 text-red-500" />}
+            icon={<AlertCircle className="size-4 text-destructive" />}
             label="Orders with Balance"
             count={summary.ordersWithBalance}
             accent="red"
@@ -263,11 +263,11 @@ function SummaryCard({
 }) {
   const valueColor =
     accent === "emerald"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-success"
       : accent === "amber"
-        ? "text-amber-600 dark:text-amber-400"
+        ? "text-warning"
         : accent === "red"
-          ? "text-red-600 dark:text-red-400"
+          ? "text-destructive"
           : "text-foreground";
 
   return (
