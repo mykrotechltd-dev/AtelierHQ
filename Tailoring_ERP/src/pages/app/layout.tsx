@@ -78,7 +78,7 @@ function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <AppSidebar tenant={tenant} currentPath={location.pathname} />
+      <AppSidebar tenant={tenant} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TrialBanner />
         <main className="flex-1 overflow-auto pb-16 md:pb-0">

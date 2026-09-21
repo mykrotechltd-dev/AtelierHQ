@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils.ts";
 import type { Tenant } from "@/lib/supabase/types.ts";
 import {
@@ -10,121 +10,125 @@ import {
   CreditCard,
   BarChart3,
   Settings,
-  ScissorsLineDashed,
   LogOut,
   Scissors,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth.ts";
-import { Button } from "@/components/ui/button.tsx";
+import { useBillingState } from "@/lib/queries/billing.ts";
 import { ThemeToggle } from "@/components/theme-toggle.tsx";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip.tsx";
+import Meter from "@/components/meter.tsx";
 
-const NAV_ITEMS = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Customers", icon: Users, path: "/customers" },
-  { label: "Orders", icon: ClipboardList, path: "/orders" },
-  { label: "Workers", icon: UserCheck, path: "/workers" },
-  { label: "Tasks", icon: CheckSquare, path: "/tasks" },
-  { label: "Payments", icon: CreditCard, path: "/payments" },
-  { label: "Patterns", icon: Scissors, path: "/patterns" },
-  { label: "Reports", icon: BarChart3, path: "/reports" },
-];
+const NAV_GROUPS = [
+  {
+    label: "Workshop",
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+      { label: "Customers", icon: Users, path: "/customers" },
+      { label: "Orders", icon: ClipboardList, path: "/orders" },
+      { label: "Workers", icon: UserCheck, path: "/workers" },
+      { label: "Tasks", icon: CheckSquare, path: "/tasks" },
+    ],
+  },
+  {
+    label: "Studio",
+    items: [
+      { label: "Patterns", icon: Scissors, path: "/patterns" },
+      { label: "Reports", icon: BarChart3, path: "/reports" },
+    ],
+  },
+  {
+    label: "Business",
+    items: [
+      { label: "Payments", icon: CreditCard, path: "/payments" },
+      { label: "Billing", icon: Wallet, path: "/billing" },
+      { label: "Settings", icon: Settings, path: "/settings" },
+    ],
+  },
+] as const;
 
-export default function AppSidebar({
-  tenant,
-  currentPath,
-}: {
-  tenant: Tenant | null;
-  currentPath: string;
-}) {
+const itemClass = ({ isActive }: { isActive: boolean }) =>
+  cn(
+    "flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-body transition-colors",
+    isActive
+      ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border)]"
+      : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+  );
+
+export default function AppSidebar({ tenant }: { tenant: Tenant | null }) {
   const { signout } = useAuth();
+  const billing = useBillingState();
+  const showTrial = billing?.state === "trialing";
+  const trialDays = billing?.daysLeft ?? 0;
 
   return (
-    <aside className="hidden md:flex w-60 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border shrink-0">
-      {/* Logo */}
-      <div className="flex items-center gap-2 px-5 py-5 border-b border-sidebar-border">
-        <ScissorsLineDashed className="size-5 text-sidebar-primary shrink-0" />
+    <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+      <div className="flex items-center gap-3 px-5 pb-4 pt-6">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+          <Sparkles className="size-[18px]" />
+        </span>
         <div className="min-w-0">
-          <p className="font-sans text-base font-semibold leading-none truncate text-sidebar-foreground">
-            {tenant?.name ?? "AtelierHQ"}
+          <p className="truncate font-sans text-base font-semibold leading-tight text-sidebar-accent-foreground">
+            AtelierHQ
           </p>
-          <p className="text-[11px] text-sidebar-foreground/50 mt-0.5 font-body tracking-wide uppercase">
-            {tenant?.currency ?? ""}
+          <p className="truncate text-xs text-sidebar-foreground/60">
+            {tenant?.name ?? ""}
           </p>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {NAV_ITEMS.map(({ label, icon: Icon, path }) => (
-          <NavLink
-            key={path}
-            to={path}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-body transition-colors",
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                  : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-              )
-            }
-          >
-            <Icon className="size-4 shrink-0" />
-            {label}
-          </NavLink>
+      <nav
+        aria-label="Primary"
+        className="flex-1 space-y-6 overflow-y-auto px-3 py-3"
+      >
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="space-y-0.5">
+            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50">
+              {group.label}
+            </p>
+            {group.items.map(({ label, icon: Icon, path }) => (
+              <NavLink key={path} to={path} className={itemClass}>
+                <Icon className="size-[18px] shrink-0" />
+                {label}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 
-      {/* Bottom */}
-      <div className="px-2 py-3 border-t border-sidebar-border space-y-0.5">
-        <NavLink
-          to="/billing"
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-body transition-colors",
-              isActive
-                ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-            )
-          }
-        >
-          <Wallet className="size-4 shrink-0" />
-          Billing
-        </NavLink>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-body transition-colors",
-              isActive
-                ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-            )
-          }
-        >
-          <Settings className="size-4 shrink-0" />
-          Settings
-        </NavLink>
-        <ThemeToggle />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-3 px-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent font-body"
-              onClick={() => signout()}
+      <div className="space-y-3 px-3 pb-4">
+        {showTrial && (
+          <div className="rounded-xl bg-sidebar-accent/70 p-3.5 text-[12.5px]">
+            <div className="flex items-center justify-between gap-2">
+              <span>Trial atelier</span>
+              <b className="tabular-nums">
+                {trialDays} day{trialDays === 1 ? "" : "s"} left
+              </b>
+            </div>
+            <Meter
+              value={30 - trialDays}
+              max={30}
+              className="mt-2.5 bg-sidebar-foreground/15"
+              label={`${trialDays} of 30 trial days left`}
+            />
+            <Link
+              to="/billing"
+              className="mt-2.5 inline-block font-semibold underline underline-offset-4"
             >
-              <LogOut className="size-4 shrink-0" />
-              Sign out
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Sign out</TooltipContent>
-        </Tooltip>
+              Review plan
+            </Link>
+          </div>
+        )}
+        <ThemeToggle />
+        <button
+          type="button"
+          onClick={() => signout()}
+          className="flex min-h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+        >
+          <LogOut className="size-[18px] shrink-0" />
+          Sign out
+        </button>
       </div>
     </aside>
   );
