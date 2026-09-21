@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "incremental": false,
+    "outDir": "dist-ds/types",
+    "rootDir": "src"
+  },
+  "include": ["src/ds/index.ts", "src/vite-env.d.ts"]
+}

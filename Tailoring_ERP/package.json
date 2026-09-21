@@ -3,10 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "types": "dist-ds/types/index.d.ts",
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
     "build": "tsc -b && vite build",
+    "build:ds": "node scripts/build-ds.mjs",
     "test": "vitest run",
     "lint": "eslint . --max-warnings=0",
     "prettier-fix": "prettier --write .",

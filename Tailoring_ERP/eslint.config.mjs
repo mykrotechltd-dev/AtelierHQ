@@ -8,7 +8,14 @@ import tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["dist", "**/_generated/*"]),
+  globalIgnores([
+    "dist",
+    "dist-ds",
+    ".ds-sync",
+    "ds-bundle",
+    ".design-sync",
+    "**/_generated/*",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

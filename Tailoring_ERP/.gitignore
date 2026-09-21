@@ -32,3 +32,12 @@ tsconfig.tsbuildinfo
 # Supabase CLI local state
 supabase/.temp
 supabase/.branches
+
+# Design-sync (Claude Design): library build output + machine-local state.
+# .design-sync/{config.json,NOTES.md,conventions.md,previews/} ARE committed.
+/dist-ds
+/.ds-sync
+/ds-bundle
+/.design-sync/.cache
+/.design-sync/learnings
+/.design-sync/node_modules
