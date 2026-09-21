@@ -6,8 +6,10 @@ import {
   useWorkers,
 } from "@/lib/queries/workers.ts";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import PageHeader from "@/components/page-header.tsx";
+import Chip, { type ChipTone } from "@/components/chip.tsx";
+import InitialsAvatar from "@/components/initials-avatar.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import {
@@ -29,43 +31,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog.tsx";
-import {
-  CheckSquare,
-  CalendarDays,
-  ArrowRight,
-  Trash2,
-  Banknote,
-} from "lucide-react";
+import { Banknote, CheckSquare, Clock, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import CreateTaskDialog from "./_components/create-task-dialog.tsx";
 import PayoutDialog from "../workers/_components/payout-dialog.tsx";
 
 type TaskStatus = "pending" | "in_progress" | "done";
 
-const COLUMNS: {
-  status: TaskStatus;
-  label: string;
-  color: string;
-  dot: string;
-}[] = [
-  {
-    status: "pending",
-    label: "Pending",
-    color: "border-t-blue-400",
-    dot: "bg-blue-400",
-  },
-  {
-    status: "in_progress",
-    label: "In Progress",
-    color: "border-t-amber-400",
-    dot: "bg-amber-400",
-  },
-  {
-    status: "done",
-    label: "Done",
-    color: "border-t-emerald-500",
-    dot: "bg-emerald-500",
-  },
+const COLUMNS: { status: TaskStatus; label: string; next: string | null }[] = [
+  { status: "pending", label: "Pending", next: "in progress" },
+  { status: "in_progress", label: "In progress", next: "done" },
+  { status: "done", label: "Done", next: null },
 ];
 
 const STATUS_NEXT: Record<TaskStatus, TaskStatus | null> = {
@@ -73,6 +49,18 @@ const STATUS_NEXT: Record<TaskStatus, TaskStatus | null> = {
   in_progress: "done",
   done: null,
 };
+
+function dueChip(
+  dueDate: string,
+  status: TaskStatus,
+): { tone: ChipTone; label: string } {
+  if (status === "done")
+    return { tone: "good", label: format(parseISO(dueDate), "dd MMM") };
+  const days = differenceInCalendarDays(parseISO(dueDate), new Date());
+  if (days < 0) return { tone: "crit", label: "Overdue" };
+  if (days === 0) return { tone: "warn", label: "Today" };
+  return { tone: "neutral", label: format(parseISO(dueDate), "dd MMM") };
+}
 
 export default function TasksPage() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -106,62 +94,67 @@ export default function TasksPage() {
     }
   };
 
-  const getTasksByStatus = (status: TaskStatus) =>
+  const byStatus = (status: TaskStatus) =>
     (tasks ?? []).filter((t) => t.status === status);
+  const open = (tasks ?? []).filter((t) => t.status !== "done");
+  const overdue = open.filter(
+    (t) =>
+      t.dueDate &&
+      differenceInCalendarDays(parseISO(t.dueDate), new Date()) < 0,
+  ).length;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="mx-auto max-w-6xl p-4 md:p-8">
       <PageHeader
+        eyebrow="Work board"
         title="Tasks"
-        description="Worker assignments and task board."
+        description={
+          tasks === undefined
+            ? "Worker assignments and task board."
+            : `${open.length} open · ${overdue} overdue`
+        }
       >
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => setPayoutOpen(true)}
-        >
-          <Banknote className="size-3.5 mr-1" /> Record payout
+        <Button variant="outline" onClick={() => setPayoutOpen(true)}>
+          <Banknote /> Record payout
         </Button>
-        <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
-          New task
+        <Button onClick={() => setTaskDialogOpen(true)}>
+          <Plus /> New task
         </Button>
       </PageHeader>
 
-      {/* Worker filter */}
       {(workers ?? []).length > 0 && (
-        <div className="flex gap-1.5 flex-wrap mb-6">
-          <button
-            onClick={() => setFilterWorkerId(undefined)}
-            className={cn(
-              "px-3 py-1 rounded-full text-xs font-body border transition-colors cursor-pointer",
-              filterWorkerId === undefined
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:border-primary/40",
-            )}
-          >
-            All workers
-          </button>
-          {(workers ?? [])
-            .filter((w) => w.isActive)
-            .map((w) => (
+        <div
+          role="group"
+          aria-label="Filter by worker"
+          className="mb-6 flex gap-2 overflow-x-auto pb-1"
+        >
+          {[
+            { id: undefined, name: "All workers" },
+            ...(workers ?? []).filter((w) => w.isActive),
+          ].map((w) => {
+            const active = filterWorkerId === w.id;
+            return (
               <button
-                key={w.id}
+                key={w.id ?? "all"}
+                type="button"
+                aria-pressed={active}
                 onClick={() => setFilterWorkerId(w.id)}
                 className={cn(
-                  "px-3 py-1 rounded-full text-xs font-body border transition-colors cursor-pointer",
-                  filterWorkerId === w.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40",
+                  "min-h-9 shrink-0 cursor-pointer rounded-full border px-3.5 text-[13px] font-semibold transition-colors",
+                  active
+                    ? "border-foreground bg-foreground text-background"
+                    : "bg-card text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground",
                 )}
               >
                 {w.name}
               </button>
-            ))}
+            );
+          })}
         </div>
       )}
 
       {tasks === undefined ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-64 w-full" />
           ))}
@@ -174,98 +167,91 @@ export default function TasksPage() {
             </EmptyMedia>
             <EmptyTitle>No tasks yet</EmptyTitle>
             <EmptyDescription>
-              Create a task and assign it to a worker
+              Create a task and assign it to a worker to start the board.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
-              New task
+            <Button onClick={() => setTaskDialogOpen(true)}>
+              <Plus /> New task
             </Button>
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {COLUMNS.map(({ status, label, color, dot }) => {
-            const col = getTasksByStatus(status);
+        <div className="grid items-start gap-4 md:grid-cols-3">
+          {COLUMNS.map(({ status, label, next }) => {
+            const col = byStatus(status);
             return (
-              <div
+              <section
                 key={status}
-                className={cn(
-                  "rounded-lg border-t-2 border border-border bg-card",
-                  color,
-                )}
+                aria-label={label}
+                className="space-y-2.5 rounded-2xl border bg-muted/60 p-3.5"
               >
-                {/* Column header */}
-                <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("size-2 rounded-full", dot)} />
-                    <span className="font-body text-sm font-medium">
-                      {label}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground font-body bg-muted rounded-full px-2 py-0.5">
-                    {col.length}
-                  </span>
+                <div className="flex items-center justify-between px-1 pb-1">
+                  <h2 className="font-sans text-sm font-semibold">{label}</h2>
+                  <Chip>{col.length}</Chip>
                 </div>
 
-                {/* Cards */}
-                <div className="p-2 space-y-2 min-h-[120px]">
-                  {col.length === 0 ? (
-                    <p className="text-center text-xs text-muted-foreground font-body py-6">
-                      No tasks
-                    </p>
-                  ) : (
-                    col.map((task) => (
-                      <div
+                {col.length === 0 ? (
+                  <p className="py-6 text-center text-[13px] text-muted-foreground">
+                    Nothing here
+                  </p>
+                ) : (
+                  col.map((task) => {
+                    const chip = task.dueDate
+                      ? dueChip(task.dueDate, status)
+                      : null;
+                    return (
+                      <article
                         key={task.id}
-                        className="rounded-md border border-border bg-background px-3 py-2.5 space-y-1.5"
+                        className="grid gap-2.5 rounded-xl border bg-card p-3.5 shadow-sm"
                       >
-                        <p className="font-body text-xs font-medium text-foreground leading-snug">
+                        <b className="font-semibold leading-snug">
                           {task.description}
-                        </p>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1">
-                          <span className="text-[11px] text-muted-foreground font-body">
-                            {task.workerName}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground font-body">
-                            {task.orderNumber}
-                          </span>
+                        </b>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Chip>{task.orderNumber}</Chip>
+                          {task.payout != null && (
+                            <Chip tone="accent">
+                              <Banknote />
+                              {task.payout.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                              })}
+                            </Chip>
+                          )}
                         </div>
-                        {task.dueDate && (
-                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-body">
-                            <CalendarDays className="size-3" />
-                            {format(parseISO(task.dueDate), "dd MMM")}
-                          </div>
-                        )}
-                        {task.payout != null && (
-                          <div className="flex items-center gap-1 text-[11px] text-accent font-body">
-                            <Banknote className="size-3" />
-                            {task.payout.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                            })}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between pt-1">
-                          {STATUS_NEXT[status as TaskStatus] ? (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="h-6 px-2 text-[11px]"
-                              onClick={() =>
-                                handleAdvance(task.id, status as TaskStatus)
-                              }
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-2 text-[13px] text-foreground/80">
+                            <InitialsAvatar name={task.workerName} size="sm" />
+                            <span className="truncate">{task.workerName}</span>
+                          </span>
+                          {chip && (
+                            <Chip tone={chip.tone}>
+                              <Clock /> {chip.label}
+                            </Chip>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between pt-0.5">
+                          {next ? (
+                            <button
+                              type="button"
+                              onClick={() => handleAdvance(task.id, status)}
+                              className="min-h-9 cursor-pointer text-[13px] font-semibold text-primary hover:underline"
                             >
-                              Move <ArrowRight className="size-3 ml-1" />
-                            </Button>
+                              Move to {next} →
+                            </button>
                           ) : (
-                            <span className="text-[11px] text-emerald-600 font-body font-medium">
-                              ✓ Done
+                            <span className="text-[13px] font-semibold text-success">
+                              Complete
                             </span>
                           )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <button className="text-destructive hover:text-destructive/80 cursor-pointer">
-                                <Trash2 className="size-3.5" />
+                              <button
+                                type="button"
+                                aria-label={`Delete task ${task.description}`}
+                                className="grid size-9 cursor-pointer place-items-center rounded-lg text-destructive transition-colors hover:bg-destructive-soft"
+                              >
+                                <Trash2 className="size-4" />
                               </button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -289,11 +275,11 @@ export default function TasksPage() {
                             </AlertDialogContent>
                           </AlertDialog>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                      </article>
+                    );
+                  })
+                )}
+              </section>
             );
           })}
         </div>

@@ -285,7 +285,11 @@ export default function Dashboard() {
                     Open orders by deadline
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/orders")}
+                >
                   All orders
                 </Button>
               </div>
@@ -366,7 +370,9 @@ export default function Dashboard() {
                           <Meter
                             value={open}
                             max={busiest}
-                            tone={open === busiest && open > 0 ? "warn" : "primary"}
+                            tone={
+                              open === busiest && open > 0 ? "warn" : "primary"
+                            }
                             label={`${w.name} has ${open} open tasks`}
                           />
                         </li>
