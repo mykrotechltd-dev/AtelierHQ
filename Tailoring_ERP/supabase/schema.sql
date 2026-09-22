@@ -2156,13 +2156,23 @@ to authenticated;
 --
 -- Manual setup after running this file (no supabase/config.toml in this
 -- project — Database Webhooks are dashboard/CLI config, not SQL):
---   1. Deploy the dispatcher:
---        npx supabase functions deploy notify-dispatch
---   2. Dashboard -> Database -> Webhooks -> Create a new webhook
---        Table:      notification_outbox
---        Events:     INSERT
---        Type:       Supabase Edge Function
---        Function:   notify-dispatch  (path suffix /dispatch, see index.ts)
+--   1. Deploy the dispatcher (--no-verify-jwt: this function is only ever
+--      called by Supabase's own webhook infrastructure, never a browser, so
+--      there is no user JWT to verify):
+--        npx supabase functions deploy notify-dispatch --no-verify-jwt
+--   2. The "Webhooks" page isn't in the Database sidebar in current
+--      dashboard versions — reach it via the dashboard search (Ctrl+K,
+--      search "webhooks") or by navigating directly to
+--      /project/<ref>/database/hooks. Create a new database webhook:
+--        Table:        notification_outbox
+--        Events:       Insert
+--        Type:         Supabase Edge Functions
+--        Function:     notify-dispatch
+--      There is no field to add a path suffix — this webhook type always
+--      calls the function's bare base URL, which is why index.ts routes on
+--      "any POST to the root" rather than a specific path. The dashboard
+--      auto-fills an Authorization: Bearer header; leave it — the function
+--      never reads it, since verify_jwt is off.
 --      This is deliberately a Database Webhook, not a raw trigger calling
 --      pg_net directly (pg_net is not enabled in this project — only
 --      pgcrypto is, see schema.sql:8): Supabase's own webhook delivery

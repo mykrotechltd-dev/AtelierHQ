@@ -2,15 +2,19 @@
 // notification_outbox table: one row means "an order crossed a
 // customer-facing status boundary and a message should go out for it."
 //
-// Route (matched on the path after the function name):
-//   POST /notify-dispatch/dispatch — Supabase Database Webhook -> this
-//   function, fired on INSERT to notification_outbox (see 0009's "Manual
-//   setup" comment for how that webhook is wired up in the Dashboard — this
-//   project has no supabase/config.toml, so it isn't declared as code).
+// Route: any POST to this function's base URL is treated as a dispatch
+// event — there is deliberately no path suffix to route on. The Dashboard's
+// "Database Webhooks -> Supabase Edge Functions" trigger type (see 0009's
+// "Manual setup" comment) only lets you pick a function by name; it always
+// calls that function's bare URL, with no field to append a path segment
+// to, so this function has to accept POSTs at its root rather than
+// requiring e.g. /dispatch. If a second route is ever needed here, add path
+// matching then — don't require a suffix the webhook UI can't produce.
 //
 // Modeled directly on supabase/functions/fincra-checkout/index.ts's shape:
-// service-role admin client, Deno.serve routing by path suffix, a json()
-// helper. The one deliberate difference is *why* this function is called at
+// service-role admin client, Deno.serve, a json() helper — but routing on
+// method (POST) rather than path suffix, per the note above. The one
+// deliberate difference beyond that is *why* this function is called at
 // all — fincra-checkout is invoked by a browser (needs getCallerTenant() to
 // authenticate a user's bearer token) or by Fincra's own signed webhook;
 // this function is invoked only by Supabase's own Database Webhook
@@ -238,9 +242,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
 
-  const path = new URL(req.url).pathname;
   try {
-    if (path.endsWith("/dispatch")) return await handleDispatch(req);
+    if (req.method === "POST") return await handleDispatch(req);
     return json({ error: "Not found" }, 404);
   } catch (err) {
     console.error(err);
