@@ -649,9 +649,13 @@ function DraftWorkspace({
   onBack: () => void;
 }) {
   const { unit } = useMeasurementUnit();
-  const [measSource, setMeasSource] = useState<MeasSource>("bespoke");
+  // Default to a standard UK 12 block so a real, fully-drawn pattern is on
+  // screen the moment this opens — nobody stares at "missing measurements"
+  // placeholders before they've typed anything. Switching to Customer or
+  // Bespoke below immediately redraws against those measurements instead.
+  const [measSource, setMeasSource] = useState<MeasSource>("standard");
   const [customerId, setCustomerId] = useState<string | "">("");
-  const [ukSize, setUkSize] = useState<UKSize | "">("");
+  const [ukSize, setUkSize] = useState<UKSize | "">("12");
   const [measurements, setMeasurements] = useState<
     Partial<Record<keyof Measurements, string>>
   >({});
