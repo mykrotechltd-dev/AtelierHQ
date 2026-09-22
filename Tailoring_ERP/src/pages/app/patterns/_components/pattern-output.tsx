@@ -1,19 +1,23 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Copy, Download } from "lucide-react";
+import { ChevronDown, Copy, Download } from "lucide-react";
 import type { PatternBlock } from "@/lib/pattern-engine.ts";
 import { buildBlockSvg } from "@/lib/pattern-svg.ts";
 import { generatePatternsPDF } from "@/lib/pattern-pdf.ts";
+import { inToUnit, unitLabel, type MeasurementUnit } from "@/lib/units.ts";
 import Chip from "@/components/chip.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Card } from "@/components/ui/card.tsx";
+import { cn } from "@/lib/utils.ts";
 
 /** The exact SVG each block exports, shown as source with copy and download. */
 export function SvgSourceView({
   blocks,
+  unit,
   onDownload,
 }: {
   blocks: PatternBlock[];
+  unit: MeasurementUnit;
   onDownload: (id: PatternBlock["id"]) => void;
 }) {
   if (blocks.length === 0) {
@@ -26,7 +30,12 @@ export function SvgSourceView({
   return (
     <div className="space-y-4">
       {blocks.map((block) => (
-        <SvgSourceCard key={block.id} block={block} onDownload={onDownload} />
+        <SvgSourceCard
+          key={block.id}
+          block={block}
+          unit={unit}
+          onDownload={onDownload}
+        />
       ))}
     </div>
   );
@@ -34,14 +43,29 @@ export function SvgSourceView({
 
 function SvgSourceCard({
   block,
+  unit,
   onDownload,
 }: {
   block: PatternBlock;
+  unit: MeasurementUnit;
   onDownload: (id: PatternBlock["id"]) => void;
 }) {
+  const [showSource, setShowSource] = useState(false);
   const source = useMemo(() => buildBlockSvg(block), [block]);
+  // What actually goes on screen: the XML prolog is meaningless inside an
+  // HTML document, and the browser drops it silently either way — strip it
+  // so the injected markup is just the <svg> root.
+  const inlineMarkup = useMemo(
+    () => source.replace(/^<\?xml[^>]*\?>\s*/, ""),
+    [source],
+  );
   const bytes = new Blob([source]).size;
-  const { w, h } = block.viewBox;
+  // block.viewBox is always stored in inches (lib/units.ts); convert to
+  // whichever unit the tailor has selected for display, same as every
+  // other measurement on this page.
+  const { w: wIn, h: hIn } = block.viewBox;
+  const w = inToUnit(wIn, unit);
+  const h = inToUnit(hIn, unit);
 
   const copy = async () => {
     try {
@@ -59,7 +83,7 @@ function SvgSourceCard({
           <b className="font-semibold">{block.name}</b>
           <Chip>{(bytes / 1024).toFixed(1)} KB</Chip>
           <Chip tone="accent">
-            Real size {w.toFixed(0)} × {h.toFixed(0)} cm
+            Real size {w.toFixed(0)} × {h.toFixed(0)} {unitLabel(unit)}
           </Chip>
         </div>
         <div className="flex gap-2">
@@ -75,13 +99,39 @@ function SvgSourceCard({
           </Button>
         </div>
       </div>
-      <pre
-        tabIndex={0}
-        aria-label={`SVG source for ${block.name}`}
-        className="max-h-80 overflow-auto bg-muted/50 p-4 font-mono text-xs leading-relaxed text-foreground/80"
+
+      {/* This is a render of the exact file above, not a redrawn stand-in —
+          what downloading gets you is what's on screen here. The markup is
+          our own generator's output (buildBlockSvg), never user input, so
+          injecting it is safe. Its width/height are real millimetres (a
+          trouser or dress panel can be well over a metre long), so the
+          child selector below scales it down to fit the card instead of
+          rendering at that physical size. */}
+      <div
+        className="flex items-center justify-center bg-[#f8f6f0] p-6 [&>svg]:h-auto [&>svg]:max-h-[420px] [&>svg]:w-auto [&>svg]:max-w-full dark:bg-[#1c1a14]"
+        dangerouslySetInnerHTML={{ __html: inlineMarkup }}
+      />
+
+      <button
+        type="button"
+        aria-expanded={showSource}
+        onClick={() => setShowSource((v) => !v)}
+        className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 border-t px-4 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
       >
-        <code>{source.replace(/></g, ">\n<")}</code>
-      </pre>
+        View SVG source
+        <ChevronDown
+          className={cn("size-4 transition-transform", showSource && "rotate-180")}
+        />
+      </button>
+      {showSource && (
+        <pre
+          tabIndex={0}
+          aria-label={`SVG source for ${block.name}`}
+          className="max-h-80 overflow-auto border-t bg-muted/50 p-4 font-mono text-xs leading-relaxed text-foreground/80"
+        >
+          <code>{source.replace(/></g, ">\n<")}</code>
+        </pre>
+      )}
     </Card>
   );
 }

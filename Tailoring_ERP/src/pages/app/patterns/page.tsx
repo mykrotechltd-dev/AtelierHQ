@@ -1242,6 +1242,7 @@ function DraftWorkspace({
           {outputFormat === "svg" && (
             <SvgSourceView
               blocks={readyBlocks}
+              unit={unit}
               onDownload={(id) => handleDownloadSVG(id)}
             />
           )}

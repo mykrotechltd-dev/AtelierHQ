@@ -256,8 +256,11 @@ function buildLabels(draft: BodiceDraft): PatternLabel[] {
 
   const labels: PatternLabel[] = [
     {
+      // Below the bust line/dart/BP cluster (all sit around 0.4–0.55×len)
+      // rather than on top of it, in the emptier stretch of the panel
+      // between the dart and the waist.
       x: midX,
-      y: len * 0.52,
+      y: len * 0.78,
       text: isFront ? "BODICE FRONT" : "BODICE BACK",
       anchor: "middle",
       fontSize: 4.5,

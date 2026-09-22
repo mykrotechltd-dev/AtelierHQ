@@ -313,7 +313,7 @@ export function skirtFront(
       {
         x: hq * 0.55,
         y: L * 0.51,
-        text: `W ${m.waist}  H ${m.hips}  L ${L.toFixed(1)} in`,
+        text: `W ${m.waist.toFixed(1)}  H ${m.hips.toFixed(1)}  L ${L.toFixed(1)} in`,
         anchor: "middle",
         fontSize: 3.5,
       },
@@ -401,7 +401,7 @@ export function skirtBack(
       {
         x: hq * 0.55,
         y: L * 0.51,
-        text: `W ${m.waist}  H ${m.hips}  L ${L.toFixed(1)} in`,
+        text: `W ${m.waist.toFixed(1)}  H ${m.hips.toFixed(1)}  L ${L.toFixed(1)} in`,
         anchor: "middle",
         fontSize: 3.5,
       },
@@ -525,7 +525,7 @@ export function trouserBlock(
       {
         x: (sideWaistX + crotchExt) * 0.4,
         y: totalH * 0.49,
-        text: `W ${waist}  H ${hips}  In ${inseam} in`,
+        text: `W ${waist.toFixed(1)}  H ${hips.toFixed(1)}  In ${inseam.toFixed(1)} in`,
         anchor: "middle",
         fontSize: 3.5,
       },
@@ -637,7 +637,7 @@ export function sleeveBlock(
       {
         x: cx,
         y: L * 0.57,
-        text: `Sl ${L}  Bicep ${bicep.toFixed(1)} in`,
+        text: `Sl ${L.toFixed(1)}  Bicep ${bicep.toFixed(1)} in`,
         anchor: "middle",
         fontSize: 3.5,
       },
@@ -771,7 +771,7 @@ function dressPanel(
       {
         x: bustQ * 0.5,
         y: Blen + skirtLen * 0.52,
-        text: `C ${chest}  W ${waist}  H ${hips} in`,
+        text: `C ${chest.toFixed(1)}  W ${waist.toFixed(1)}  H ${hips.toFixed(1)} in`,
         anchor: "middle",
         fontSize: 3.5,
       },
