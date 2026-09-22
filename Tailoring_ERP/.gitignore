@@ -26,8 +26,11 @@ tsconfig.tsbuildinfo
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables — but keep the example file tracked, so it can
+# document what to set (incl. VITE_ADMIN_ONLY) for anyone setting up a
+# new deployment.
 .env*
+!.env.local.example
 
 # Supabase CLI local state
 supabase/.temp
