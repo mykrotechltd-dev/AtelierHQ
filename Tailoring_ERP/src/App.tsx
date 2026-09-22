@@ -43,63 +43,103 @@ import AdminActivityPage from "./pages/admin/activity/page.tsx";
 import AdminAuditPage from "./pages/admin/audit/page.tsx";
 import AdminRevenuePage from "./pages/admin/revenue/page.tsx";
 
+// Platform admin area — own auth context (AdminAuthProvider), fully
+// separate from tenant auth. Shared across both the login route and the
+// authenticated shell so there is exactly one is_platform_admin() check per
+// session, not one per page.
+//
+// Pulled into a function (not a <Route>-tree constant) so the exact same
+// element tree can be mounted twice: under /admin on the combined
+// deployment below, and again — unchanged — on the dedicated admin
+// subdomain build. Every internal link inside the admin pages is an
+// absolute "/admin/..." path, so reusing the identical tree (rather than
+// re-rooting it) means none of those links need to know which deployment
+// they're running on.
+function AdminRoutes() {
+  return (
+    <Route
+      element={
+        <AdminAuthProvider>
+          <Outlet />
+        </AdminAuthProvider>
+      }
+    >
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<AdminDashboard />} />
+        <Route path="orders" element={<AdminOrdersPage />} />
+        <Route path="clients" element={<AdminClientsPage />} />
+        <Route path="schedule" element={<AdminSchedulePage />} />
+        <Route path="inventory" element={<AdminInventoryPage />} />
+        <Route path="staff" element={<AdminStaffPage />} />
+        <Route path="shops" element={<AdminShopsPage />} />
+        <Route path="activity" element={<AdminActivityPage />} />
+        <Route path="audit" element={<AdminAuditPage />} />
+        <Route path="revenue" element={<AdminRevenuePage />} />
+        <Route path="*" element={<AdminNotFound />} />
+      </Route>
+    </Route>
+  );
+}
+
+// Set only on the dedicated admin.<domain> Vercel project (see
+// .env.local.example) — every other deployment, including local dev,
+// leaves this unset and gets the normal combined tenant + admin app.
+const isAdminOnly = import.meta.env.VITE_ADMIN_ONLY === "true";
+
 export default function App() {
   return (
     <DefaultProviders>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/auth/forgot-password" element={<ForgotPassword />} />
-          <Route path="/auth/reset-password" element={<ResetPassword />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/customers" element={<CustomersPage />} />
-            <Route path="/customers/:id" element={<CustomerDetailPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/orders/:id" element={<OrderDetailPage />} />
-            <Route path="/workers" element={<WorkersPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/patterns" element={<PatternsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/billing" element={<BillingPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<AppNotFound />} />
-          </Route>
+          {isAdminOnly ? (
+            <>
+              {AdminRoutes()}
+              {/* Bare "/", stray tenant links, typos — anything outside
+                  /admin on this deployment lands on the admin login or
+                  dashboard rather than a dead end. */}
+              <Route path="*" element={<Navigate to="/admin" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route
+                path="/auth/forgot-password"
+                element={<ForgotPassword />}
+              />
+              <Route
+                path="/auth/reset-password"
+                element={<ResetPassword />}
+              />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route element={<AppLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/customers" element={<CustomersPage />} />
+                <Route
+                  path="/customers/:id"
+                  element={<CustomerDetailPage />}
+                />
+                <Route path="/orders" element={<OrdersPage />} />
+                <Route path="/orders/:id" element={<OrderDetailPage />} />
+                <Route path="/workers" element={<WorkersPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/payments" element={<PaymentsPage />} />
+                <Route path="/patterns" element={<PatternsPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/billing" element={<BillingPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<AppNotFound />} />
+              </Route>
 
-          {/* Platform admin area — own auth context (AdminAuthProvider),
-              fully separate from tenant auth above. Shared across both the
-              login route and the authenticated shell so there is exactly
-              one is_platform_admin() check per session, not one per page. */}
-          <Route
-            element={
-              <AdminAuthProvider>
-                <Outlet />
-              </AdminAuthProvider>
-            }
-          >
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="orders" element={<AdminOrdersPage />} />
-              <Route path="clients" element={<AdminClientsPage />} />
-              <Route path="schedule" element={<AdminSchedulePage />} />
-              <Route path="inventory" element={<AdminInventoryPage />} />
-              <Route path="staff" element={<AdminStaffPage />} />
-              <Route path="shops" element={<AdminShopsPage />} />
-              <Route path="activity" element={<AdminActivityPage />} />
-              <Route path="audit" element={<AdminAuditPage />} />
-              <Route path="revenue" element={<AdminRevenuePage />} />
-              <Route path="*" element={<AdminNotFound />} />
-            </Route>
-          </Route>
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+              {AdminRoutes()}
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </>
+          )}
         </Routes>
       </BrowserRouter>
     </DefaultProviders>
