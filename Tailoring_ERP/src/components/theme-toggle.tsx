@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -12,12 +11,11 @@ import { Button } from "@/components/ui/button.tsx";
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
 
-  // next-themes' own recommended pattern: resolvedTheme is undefined until
-  // mount, so render a neutral placeholder for that one frame rather than
-  // guess and flip icons right after.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
+  // next-themes' resolvedTheme is undefined until mount (it reads
+  // localStorage/media query client-side), so `mounted` is derived from
+  // that directly — a neutral placeholder for that one frame rather than
+  // guessing and flipping icons right after. No effect/local state needed.
+  const mounted = resolvedTheme !== undefined;
   const isDark = mounted && resolvedTheme === "dark";
 
   return (
