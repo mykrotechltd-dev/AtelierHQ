@@ -44,3 +44,4 @@ supabase/.branches
 /.design-sync/.cache
 /.design-sync/learnings
 /.design-sync/node_modules
+.vercel
