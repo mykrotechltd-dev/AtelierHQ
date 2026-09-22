@@ -42,6 +42,7 @@ import AdminNotFound from "./pages/admin/not-found.tsx";
 import AdminActivityPage from "./pages/admin/activity/page.tsx";
 import AdminAuditPage from "./pages/admin/audit/page.tsx";
 import AdminRevenuePage from "./pages/admin/revenue/page.tsx";
+import AdminNotificationsPage from "./pages/admin/notifications/page.tsx";
 
 // Platform admin area — own auth context (AdminAuthProvider), fully
 // separate from tenant auth. Shared across both the login route and the
@@ -77,6 +78,7 @@ function AdminRoutes() {
         <Route path="activity" element={<AdminActivityPage />} />
         <Route path="audit" element={<AdminAuditPage />} />
         <Route path="revenue" element={<AdminRevenuePage />} />
+        <Route path="notifications" element={<AdminNotificationsPage />} />
         <Route path="*" element={<AdminNotFound />} />
       </Route>
     </Route>

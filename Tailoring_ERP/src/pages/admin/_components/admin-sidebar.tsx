@@ -13,6 +13,7 @@ import {
   ScrollText,
   TrendingUp,
   Sparkles,
+  Send,
 } from "lucide-react";
 import { useAdminAuth } from "@/hooks/use-admin-auth.ts";
 import { ThemeToggle } from "@/components/theme-toggle.tsx";
@@ -31,6 +32,11 @@ const GROUPS = [
     items: [
       { label: "Audit log", icon: ScrollText, path: "/admin/audit" },
       { label: "Revenue", icon: TrendingUp, path: "/admin/revenue" },
+      {
+        label: "Notifications",
+        icon: Send,
+        path: "/admin/notifications",
+      },
     ],
   },
   {

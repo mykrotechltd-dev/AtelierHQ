@@ -69,6 +69,24 @@ export interface AdminRecentPayment {
   reference: string;
 }
 
+/** A row from notification_outbox (0009-0011), via admin_list_notifications
+ *  (0012) — the only client-readable view of that table, since it carries
+ *  RLS enabled with zero client policies. */
+export interface AdminNotification {
+  id: number;
+  createdAt: string;
+  sentAt: string | null;
+  tenantName: string;
+  orderNumber: string | null;
+  customerName: string | null;
+  toStatus: "completed" | "delivered";
+  templateKey: string;
+  status: "pending" | "sent" | "failed" | "skipped";
+  channelUsed: "whatsapp" | "rcs" | "sms" | null;
+  attemptCount: number;
+  lastError: string | null;
+}
+
 /** 71+ healthy, 41 to 70 watch, 0 to 40 at risk. */
 export function healthBand(score: number): "good" | "warn" | "crit" {
   return score >= 71 ? "good" : score >= 41 ? "warn" : "crit";

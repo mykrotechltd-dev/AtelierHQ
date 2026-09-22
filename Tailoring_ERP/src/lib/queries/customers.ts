@@ -11,6 +11,7 @@ function mapCustomer(row: Record<string, unknown>): Customer {
     phone: (row.phone as string) ?? null,
     email: (row.email as string) ?? null,
     notes: (row.notes as string) ?? null,
+    whatsappOptIn: (row.whatsapp_opt_in as boolean) ?? false,
     measurements: (row.measurements as Measurements) ?? null,
   };
 }
@@ -61,6 +62,7 @@ export function useCreateCustomer() {
       phone?: string;
       email?: string;
       notes?: string;
+      whatsappOptIn?: boolean;
       measurements?: Measurements;
     }) => {
       const { data, error } = await supabase
@@ -70,6 +72,7 @@ export function useCreateCustomer() {
           phone: input.phone ?? null,
           email: input.email ?? null,
           notes: input.notes ?? null,
+          whatsapp_opt_in: input.whatsappOptIn ?? false,
           measurements: input.measurements ?? null,
         })
         .select()
@@ -91,12 +94,24 @@ export function useUpdateCustomer() {
       phone?: string;
       email?: string;
       notes?: string;
+      whatsappOptIn?: boolean;
       measurements?: Measurements;
     }) => {
-      const { id, ...updates } = input;
+      // Spreading camelCase keys straight into .update() only ever worked
+      // because every prior field's camelCase name matched its column name
+      // (name, phone, email, notes — none have underscores). whatsapp_opt_in
+      // doesn't, so it's mapped explicitly rather than joining the spread —
+      // the same "conditional explicit mapping" pattern lib/queries/orders.ts
+      // already uses for garment_type/unit_price.
+      const { id, whatsappOptIn, ...rest } = input;
       const { error } = await supabase
         .from("customers")
-        .update(updates)
+        .update({
+          ...rest,
+          ...(whatsappOptIn !== undefined
+            ? { whatsapp_opt_in: whatsappOptIn }
+            : {}),
+        })
         .eq("id", id);
       if (error) throw error;
     },

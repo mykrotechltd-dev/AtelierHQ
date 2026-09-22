@@ -4,6 +4,7 @@ import { supabase } from "../supabase/client.ts";
 import type {
   AdminActivityEvent,
   AdminAuditEntry,
+  AdminNotification,
   AdminPlatformOverview,
   AdminRecentPayment,
   AdminTenantHealth,
@@ -98,6 +99,25 @@ export function useAdminAuditLog(limit = 100): QueryState<AdminAuditEntry[]> {
         });
         if (error) throw error;
         return data as AdminAuditEntry[];
+      },
+      retry: false,
+    }),
+  );
+}
+
+export function useAdminNotifications(
+  limit = 100,
+): QueryState<AdminNotification[]> {
+  return state(
+    useQuery({
+      queryKey: ["admin", "notifications", limit],
+      queryFn: async () => {
+        const { data, error } = await supabase.rpc(
+          "admin_list_notifications",
+          { p_limit: limit },
+        );
+        if (error) throw error;
+        return data as AdminNotification[];
       },
       retry: false,
     }),

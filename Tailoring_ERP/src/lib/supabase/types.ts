@@ -285,6 +285,12 @@ export interface Customer {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  /** Meta requires documented, affirmative opt-in before a business can
+   *  message a customer on WhatsApp at all — a phone number on file is not
+   *  itself consent. Read directly by WhatsAppAdapter.supports() in
+   *  notify-dispatch; enforced at the adapter boundary, not trusted to
+   *  business logic upstream. */
+  whatsappOptIn: boolean;
   measurements: Measurements | null;
 }
 

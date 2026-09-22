@@ -140,6 +140,7 @@ export function useOrder(id: string | undefined):
               phone: (customerRow.phone as string) ?? null,
               email: (customerRow.email as string) ?? null,
               notes: (customerRow.notes as string) ?? null,
+              whatsappOptIn: (customerRow.whatsapp_opt_in as boolean) ?? false,
               measurements:
                 customerRow.measurements as Customer["measurements"],
             }

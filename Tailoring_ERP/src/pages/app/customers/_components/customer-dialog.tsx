@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
 import {
   Form,
   FormField,
@@ -45,6 +46,7 @@ const schema = z.object({
   phone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   notes: z.string().optional(),
+  whatsappOptIn: z.boolean(),
   chest: z.string().optional(),
   waist: z.string().optional(),
   hips: z.string().optional(),
@@ -105,6 +107,7 @@ export default function CustomerDialog({
       phone: customer?.phone ?? "",
       email: customer?.email ?? "",
       notes: customer?.notes ?? "",
+      whatsappOptIn: customer?.whatsappOptIn ?? false,
       chest: fromIn(m?.chest, unit),
       waist: fromIn(m?.waist, unit),
       hips: fromIn(m?.hips, unit),
@@ -144,6 +147,7 @@ export default function CustomerDialog({
         phone: values.phone || undefined,
         email: values.email || undefined,
         notes: values.notes || undefined,
+        whatsappOptIn: values.whatsappOptIn,
         measurements: hasMeasurements ? measurements : undefined,
       };
 
@@ -211,6 +215,31 @@ export default function CustomerDialog({
                         <Input placeholder="+234 801 234 5678" {...field} />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="whatsappOptIn"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start gap-2 space-y-0 rounded-md border p-3">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(v) => field.onChange(v === true)}
+                        />
+                      </FormControl>
+                      <div className="space-y-1">
+                        <FormLabel className="text-sm font-normal">
+                          Customer agreed to receive order updates on WhatsApp
+                        </FormLabel>
+                        <p className="text-xs text-muted-foreground font-body">
+                          Required before we can WhatsApp this customer — Meta
+                          requires their explicit consent, not just a phone
+                          number on file. Leave unchecked and updates fall
+                          back to SMS instead.
+                        </p>
+                      </div>
                     </FormItem>
                   )}
                 />
