@@ -28,11 +28,27 @@ create table plans (
   amount        numeric(12,2) not null,
   currency      text not null,
   interval_days int not null default 30,
-  is_active     boolean not null default true
+  is_active     boolean not null default true,
+  live_price_amount numeric(12,2),
+  live_price_currency text,
+  constraint plans_live_price_approval check (
+    (live_price_amount is null and live_price_currency is null)
+    or (
+      live_price_amount is not null and live_price_currency is not null
+      and amount > 0 and amount <> 'NaN'::numeric
+      and currency ~ '^[A-Z]{3}$'
+      and live_price_amount = amount and live_price_currency = currency
+    )
+  )
 );
 
--- Placeholder price — change this before going live:
---   update plans set amount = <real amount>, currency = '<real currency>' where code = 'standard';
+comment on column public.plans.live_price_amount is
+  'Explicitly approved live price snapshot; NULL blocks production checkout. Set with amount and currency in one trusted operator update.';
+comment on column public.plans.live_price_currency is
+  'Currency of the explicitly approved live price. Both snapshot fields must match the current price; see subscription-billing/PRICING.md.';
+
+-- Sandbox placeholder only. NULL live-price snapshots block production checkout.
+-- Choose and approve the business price using functions/subscription-billing/PRICING.md.
 insert into plans (code, name, amount, currency, interval_days, is_active)
 values ('standard', 'AtelierHQ Standard', 5000, 'NGN', 30, true)
 on conflict (code) do nothing;

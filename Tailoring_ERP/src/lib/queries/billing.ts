@@ -108,7 +108,23 @@ export function useStartSubscriptionCheckout() {
       "subscription-billing/checkout",
       { body: { planCode } },
     );
-    if (error) throw error;
+    if (error) {
+      // FunctionsHttpError carries the server Response in context; its own
+      // message is generic and hides actionable billing configuration errors.
+      if (error.context instanceof Response) {
+        const body = await error.context
+          .clone()
+          .json()
+          .catch(() => null);
+        if (
+          body?.code === "BILLING_PRICE_NOT_CONFIGURED" &&
+          typeof body.error === "string"
+        ) {
+          throw new Error(body.error);
+        }
+      }
+      throw error;
+    }
     return (data as { url: string }).url;
   };
 }
