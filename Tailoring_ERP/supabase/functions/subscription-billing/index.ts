@@ -107,6 +107,30 @@ async function handleCheckout(req: Request) {
     return json({ error: "That plan is not available" }, 400);
   }
 
+  // Live billing requires an explicit approval of this exact price. Missing
+  // columns (function deployed before migration), NULL approvals, and changed
+  // prices all fail closed. Sandbox continues to use the seeded test price.
+  const amount = Number(plan.amount);
+  if (
+    FINCRA_LIVE &&
+    (!Number.isFinite(amount) ||
+      amount <= 0 ||
+      typeof plan.currency !== "string" ||
+      !/^[A-Z]{3}$/.test(plan.currency) ||
+      plan.live_price_amount == null ||
+      Number(plan.live_price_amount) !== amount ||
+      plan.live_price_currency !== plan.currency)
+  ) {
+    return json(
+      {
+        code: "BILLING_PRICE_NOT_CONFIGURED",
+        error:
+          "The production subscription price is not configured. Please contact support.",
+      },
+      503,
+    );
+  }
+
   const reference = `sub-${caller.tenant.id}-${crypto.randomUUID()}`;
   const baseUrl = FINCRA_LIVE
     ? "https://api.fincra.com"
